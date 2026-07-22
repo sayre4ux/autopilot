@@ -1,5 +1,5 @@
 {
-  "description": "Optional fail-open Autopilot enforcement and reconciliation hooks.",
+  "description": "Optional fail-open Autopilot enforcement and reconciliation hooks. Enforcement mode is resolved by the hook scripts from the plugin setting (CLAUDE_PLUGIN_OPTION_ENFORCEMENT, from userConfig.enforcement), then ~/.autopilot/config.jsonc, defaulting to advisory.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,8 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard-bash.py", "--mode", "${user_config.enforcement}"]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard-bash.py\""
           }
         ]
       }
@@ -18,8 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/scripts/ledger-nudge.py", "--mode", "${user_config.enforcement}"]
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/ledger-nudge.py\""
           }
         ]
       }

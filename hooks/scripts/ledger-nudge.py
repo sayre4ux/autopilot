@@ -7,8 +7,29 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any
+
+
+def _resolve_mode(cli_mode: str | None) -> str:
+    """Enforcement mode precedence: valid --mode > plugin userConfig (env) > ~/.autopilot/config.jsonc > advisory."""
+    valid = {"off", "advisory", "strict"}
+    if cli_mode in valid:
+        return cli_mode
+    env_mode = os.environ.get("CLAUDE_PLUGIN_OPTION_ENFORCEMENT")
+    if env_mode in valid:
+        return env_mode
+    config = Path.home() / ".autopilot" / "config.jsonc"
+    if config.is_file():
+        try:
+            text = re.sub(r"//[^\n]*", "", config.read_text(encoding="utf-8"))
+            mode = json.loads(text).get("enforcement")
+            if mode in valid:
+                return mode
+        except Exception:
+            pass
+    return "advisory"
 
 
 def _project_and_session(payload: Any) -> tuple[Path, str | None]:
@@ -37,21 +58,9 @@ def _owned_active_rows(text: str, session: str | None) -> list[str]:
 def main() -> int:
     try:
         parser = argparse.ArgumentParser()
-        parser.add_argument("--mode", default="advisory")
+        parser.add_argument("--mode", default=None)
         args = parser.parse_args()
-        mode = args.mode
-        if mode not in {"off", "advisory", "strict"}:
-            config = Path.home() / ".autopilot" / "config.jsonc"
-            mode = "advisory"
-            if config.is_file():
-                try:
-                    import re
-                    text = re.sub(r"//[^\n]*", "", config.read_text(encoding="utf-8"))
-                    mode = json.loads(text).get("enforcement", "advisory")
-                except Exception:
-                    pass
-            if mode not in {"off", "advisory", "strict"}:
-                mode = "advisory"
+        mode = _resolve_mode(args.mode)
         if mode == "off":
             return 0
 
