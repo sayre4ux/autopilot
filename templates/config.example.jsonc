@@ -40,5 +40,5 @@
 
   // --- ILLUSTRATIVE machine-specific entry (allowed here ONLY, never in shipped defaults) ---
   // Personal environment quirks the orchestrator should know about. Example:
-  // "environmentNotes": "Bash is proxied by rtk; tool results may carry headroom compression markers."
+  // "environmentNotes": "Python is managed by uv (never pip/venv); Node by fnm (never nvm)."
 }
