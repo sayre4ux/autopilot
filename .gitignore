@@ -1,2 +1,4 @@
 .harness/
 .autopilot/
+__pycache__/
+*.py[cod]
