@@ -1,7 +1,7 @@
 # Review cycle
 
-Review is optional and additive. Verification of above-threshold code remains mandatory
-even with review off.
+Review is optional and additive. It never substitutes for intake, and it does not change
+whether the verifier runs — that is R7 in `judgment.md`, evaluated independently of mode.
 
 ## Modes
 

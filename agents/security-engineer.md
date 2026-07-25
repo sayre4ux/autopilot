@@ -33,3 +33,10 @@ Run lint, compile, tests, and a real exercise appropriate to the task. Report th
 commands and key output, security decisions and assumptions, limitations with evidence,
 human-review needs, and `IMPLEMENTATION NOTES`. You cannot spawn agents or review your own
 work.
+
+## Completion callback
+
+If your brief contains a `<callback>` block, the command inside it is your final action: run
+it exactly once, after your report is complete, whether you succeeded or failed. It is how
+the orchestrator learns you finished — a report with no callback may never be read. Send
+nothing beyond that one command, and never spawn agents, teams, or sessions.

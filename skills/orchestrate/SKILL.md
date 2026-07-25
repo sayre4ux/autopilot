@@ -23,10 +23,16 @@ files in this skill as executable doctrine; do not improvise past a relevant rub
 5. Write a ledger row before non-trivial action. On resume, the ledger is authoritative.
 6. Check model aliases, paths, parameters, and evidence. If something cannot be checked,
    report that instead of guessing.
-7. External outputs receive identical intake. Above-threshold code always gets a native
-   fresh-context verifier, even with review off.
+7. External outputs receive identical intake. The native fresh-context verifier runs when
+   R7 in `references/judgment.md` fires — always for external-worker code — independent of
+   review mode. Native-authored code with clean gate evidence relies on step-7 intake.
 8. The orchestrator is a lean dispatcher, not a worker. Push heavy reading and file context
    into dispatches so the driving session stays small; never let it balloon into the work.
+9. Never idle waiting and never leave work running with no wake signal. Every dispatch either
+   returns inline or pings back to the callback address resolved at startup. Fan-out
+   dispatches detached, marks its rows `awaiting`, and ends the turn; if no callback address
+   resolved, dispatch synchronously instead. See the callback section of
+   `references/dispatch.md`.
 
 ## Cost and context discipline
 
@@ -65,6 +71,13 @@ available — role dispatches route through the sc-managed path in
 `references/dispatch.md`. If detection fails, or any later sc call fails, fall through to
 Agent-tool/registry dispatch and log the degradation; never retry sc ritualistically.
 
+In the same detection pass, resolve the callback address that lets finished workers wake this
+session: `sc agents get --to "id:chat:$SUPERCONDUCTOR_TERMINAL_ID" --output json`, usable only
+when the read succeeds with `capabilities.send` and `capabilities.queue` true. Record it in
+the ledger header as `Callback: chat:<terminal-id>`; on failure record `Callback: none` and
+keep every dispatch synchronous. This matters most when the session is headless (`claude -p`):
+the process exits at turn end, so a queued callback is the only thing that restarts it.
+
 If the codebase-memory MCP is available, use it as the primary code-discovery tool for
 this job. Before decomposition, ensure the target project is indexed: check `index_status`,
 run `index_repository` once if it is absent, and `detect_changes` to refresh a stale index.
@@ -90,11 +103,15 @@ Create `<project>/.autopilot/ledger.md` on first non-trivial use:
 ```markdown
 # Task Ledger
 
+Callback: chat:<terminal-id> | none
+
 | Task ID | Type | Role | Status | Depends On | Model Used | Notes |
 |---|---|---|---|---|---|---|
 ```
 
-Statuses: `open | active | blocked | done | dropped`.
+Statuses: `open | active | awaiting | blocked | done | dropped`. `awaiting` means the work is
+running elsewhere and a callback will wake this session; record the callback target, dispatch
+mode, and expected duration in Notes.
 
 ## Dispatch rules
 
@@ -116,12 +133,17 @@ installation variables in a dispatch.
 For native Agent-tool dispatch, use the exact namespaced `subagent_type` values listed in
 `references/roles.md`.
 
+Pass `--callback <target>` to CLI workers whenever an address resolved, adding `--detach`
+when fanning out or when the worker will run for minutes; then end the turn rather than
+waiting. sc-managed role dispatches carry the `<callback>` block inside the brief. Agent-tool
+and MCP dispatches are synchronous and need nothing.
+
 First external failure receives one retry with output and metadata attached. A second
 failure routes to native engineer, or security-engineer for security work. Record every
 worker id/model family or native alias/effort in the ledger.
 
 At intake, spot-check for gaming, red-team when warranted, sign off every criterion using
-actual evidence, and run the native verifier on above-threshold code. Optional review then
+actual evidence, and run the native verifier when R7 fires. Optional review then
 selects a review-capable worker from another family when possible, falling back to native
 reviewer.
 
@@ -131,3 +153,8 @@ An empty worker registry, missing runner, missing external CLI, or unavailable r
 worker must not break the harness. Fall through to native roles and log why. If only one
 model alias is available, preserve role separation, reduce parallelism, strengthen briefs,
 and pass that alias explicitly to each native dispatch.
+
+An unresolvable callback address is a degradation, not a failure: log `Callback: none`, drop
+`--detach`, and run every dispatch synchronously in-turn. A delivered-false callback in
+`meta.json` means that task's wake was lost — reconcile it by reading the artifacts directly
+rather than waiting for a ping that will not come.

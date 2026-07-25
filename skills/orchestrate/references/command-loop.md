@@ -51,8 +51,10 @@ For work above trivial, create or update a ledger row before starting:
 | Task ID | Type | Role | Status | Depends On | Model Used | Notes |
 ```
 
-Statuses are `open | active | blocked | done | dropped`. On resume, the ledger—not
-conversation memory—is authoritative.
+Statuses are `open | active | awaiting | blocked | done | dropped`. `awaiting` means the
+work is running elsewhere and a callback will wake this session; its Notes hold the callback
+target, dispatch mode, and expected duration. On resume — including a resume triggered by a
+callback into a cold process — the ledger, not conversation memory, is authoritative.
 
 ## 5 — Decompose acceptance-first
 
@@ -83,17 +85,35 @@ fill the matching template in `dispatch.md`. External and native workers receive
 `.autopilot/dispatch/T-###.md`. Check goal/motivation, concrete criteria, exact output,
 redlines, and all required materials. Long specifications remain files.
 
+Then choose how the result comes back, per the callback section of `dispatch.md`. One short
+dispatch runs synchronously. A fan-out of two or more workers, or any worker expected to take
+minutes, dispatches with a callback — `--detach --callback` for CLI workers, the brief's
+`<callback>` block for sc agents — sets each row to `awaiting`, and ends the turn. Never poll
+and never idle the session; equally, never detach work when no callback address resolved,
+because an unwakeable session loses the result entirely.
+
+## 6a — Wake
+
+A callback re-enters here, possibly in a cold process. Reconcile the ledger before anything
+else, then run step 7 for the announced task id alone. Leave other `awaiting` rows awaiting
+and end the turn again — the final callback is the one that reaches close-out. For a row that
+has gone quiet past its expected duration, probe rather than guess: `kill -0 <pid>` from its
+`.pending.json` for a CLI worker, `sc agent wait --idle` for an sc agent. A dead process with
+no callback is a failed dispatch and takes the normal escalation path.
+
 ## 7 — Three-gate intake
 
 Apply identical gates regardless of producer:
 
 1. Spot-check actual artifacts for hardcoded fixtures, gaming, and unsupported limitations.
+   Read the diff itself, never the report alone — when R7 skips the verifier this is the
+   only independent read of the code.
 2. Red-team unattended, user-data, security, and policy work with fresh context and,
    where possible, a different model family.
 3. Sign off every criterion against real evidence. Mechanisms require proof from a real run.
 
-Above-threshold code also requires the native fresh-context verifier to return
-`CONFIRMED`, even when review mode is off and even when an external worker produced it.
+Code additionally requires the native fresh-context verifier to return `CONFIRMED` whenever
+R7 in `judgment.md` fires, independent of review mode. External-worker code always fires R7.
 Visual sign-off requires the orchestrator to view the rendered pages. Run the optional
 review cycle here.
 
@@ -105,8 +125,9 @@ urgent work, or needs a ledger update. The orchestrator owns aggregate consisten
 ## 9 — Close out
 
 Report conclusion first, then paths and evidence. Record a new lesson only when no existing
-lesson covers it; otherwise increase its hit count. Reconcile every active/open row owned
-by this session and run the housekeeping thresholds in `maintenance.md`.
+lesson covers it; otherwise increase its hit count. Reconcile every active/open/awaiting row
+owned by this session — close out only when none remain awaiting — and run the housekeeping
+thresholds in `maintenance.md`.
 
 ## Quick reference
 
@@ -117,8 +138,9 @@ by this session and run the housekeeping thresholds in `maintenance.md`.
 3 Route    ask-first / delegate / model-or-worker
 4 Ticket   ledger before action
 5 Split    criteria first; parallelize independents
-6 Dispatch self-contained identical brief
-7 Intake   spot-check / red-team / sign-off / verifier
+6 Dispatch self-contained identical brief; sync or callback+detach, then end the turn
+6a Wake   reconcile ledger / intake the announced task only
+7 Intake   spot-check / red-team / sign-off / verifier per R7
 8 Zoom out aggregate consistency
 9 Close    report / learn / reconcile
 ```

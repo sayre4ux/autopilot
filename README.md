@@ -7,7 +7,8 @@ It packages a persistent task ledger, self-contained dispatch briefs, six native
 severity-gated review, and an optional registry of external coding workers.
 
 Quality does not depend on which worker produced the change. Every result returns through
-the same intake gates, and non-trivial code receives a fresh-context native verifier.
+the same intake gates, and a fresh-context native verifier gates the cases that need it —
+always for external-worker code, plus security, unattended, and weak-evidence work.
 
 ## Why
 
@@ -40,6 +41,13 @@ review. The orchestrator is the only dispatcher; agents never spawn agents. Work
 software threshold—more than three files, more than 200 changed lines, or multi-component
 design—may auto-enter. Document, deck, visual, and prose work enters only when explicitly
 orchestrated.
+
+Dispatched work pings back. A fan-out of external workers runs detached and each one wakes the
+dispatching session when it finishes, so the orchestrator ends its turn instead of idling —
+which is what makes fan-out usable from a headless `claude -p` session. The runner emits the
+callback for CLI workers (Codex, Grok, GPT, opencode) on every exit path; sc-managed agents
+carry the send command in their brief; Agent-tool and MCP dispatches are synchronous already.
+Without a resolvable callback address every dispatch simply stays synchronous.
 
 Runtime state belongs to the user and project, not the plugin:
 

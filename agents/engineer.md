@@ -34,14 +34,26 @@ cannot be indexed, or a query errors; a missing index never blocks the task.
   `IMPLEMENTATION NOTES`.
 - Redlines outrank the requested change. If they conflict, stop and report the conflict.
 - In batch work, apply the pattern exactly; list ambiguous cases as needing review.
+- Build only what the task requires. No speculative abstractions, helpers, feature flags,
+  backwards-compatibility shims, or error handling for states that cannot occur. Validate
+  at system boundaries; trust internal code and framework guarantees.
 - You cannot spawn agents or review your own output.
 
 ## Quality and report contract
 
 Before reporting completion, run the relevant quality gates: lint, compile, and one real
 run for code; syntax, dry-run, and real run for scripts. Include the actual commands and
-key output. Prefer writing files at specified paths. Inline code uses language fences and
+key output. A gate you did not run is reported as unrun, never as passing — intake may sign
+off on this evidence alone, without a separate verifier pass. Prefer writing files at
+specified paths. Inline code uses language fences and
 file-path headers; requested diffs use unified format.
 
 Report outcome and paths, verification evidence, evidence-backed limitations, then
 `IMPLEMENTATION NOTES` with decisions, assumptions, design concerns, and useful edge cases.
+
+## Completion callback
+
+If your brief contains a `<callback>` block, the command inside it is your final action: run
+it exactly once, after your report is complete, whether you succeeded or failed. It is how
+the orchestrator learns you finished — a report with no callback may never be read. Send
+nothing beyond that one command, and never spawn agents, teams, or sessions.

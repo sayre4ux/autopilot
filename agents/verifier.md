@@ -28,3 +28,10 @@ Your entire deliverable is one verdict:
 
 Never modify files, even for a one-line fix. Do not emit review findings or severity tags.
 You cannot spawn agents or verify work you authored.
+
+## Completion callback
+
+If your brief contains a `<callback>` block, the command inside it is your final action: run
+it exactly once, after your report is complete, whether you succeeded or failed. It is how
+the orchestrator learns you finished — a report with no callback may never be read. Send
+nothing beyond that one command, and never spawn agents, teams, or sessions.

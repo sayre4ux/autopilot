@@ -19,6 +19,8 @@ Every native or external worker receives this self-contained shape:
   <output_format>Exact response and artifact shape.</output_format>
   <redlines>Files, actions, or decisions that must not change.</redlines>
   <materials>All specifications, fixtures, and upstream outputs by readable path.</materials>
+  <callback>Present only when the vehicle needs the agent to ping back; see the callback
+  section. Omitted for Agent-tool and MCP dispatch, where the tool return is the ping.</callback>
 </dispatch>
 ```
 
@@ -52,6 +54,128 @@ Return conclusions and artifact paths rather than large dumps. Include:
 - `IMPLEMENTATION NOTES` for implementers or `ASSUMPTIONS` for architects.
 
 Source every factual or numeric claim.
+
+## Completion callback and wake
+
+The orchestrator never idles while workers run. Every dispatch vehicle either returns its
+result inline or pings back and wakes the dispatching session when it finishes. This matters
+most when the session is headless (`claude -p` under super.engineering): the turn ends, the
+process exits, and a queued callback message is the only thing that starts it again.
+
+### Resolve the callback address once per job
+
+The address is the dispatching session's own sc target:
+
+```text
+sc agents get --to "id:chat:$SUPERCONDUCTOR_TERMINAL_ID" --output json
+```
+
+Usable only when that read succeeds and reports `capabilities.send` and `capabilities.queue`
+both true. Record it in the ledger header as `Callback: chat:<terminal-id>`. Anything else —
+no `sc`, no `SUPERCONDUCTOR_TERMINAL_ID`, failed read, `send`/`queue` false — means there is
+no callback address: log the degradation and run every dispatch synchronously. Synchronous
+is the pre-callback behavior and is always correct, only slower. Never invent a target;
+`sc agents list --output json` shows the real ids.
+
+### Who pings back, by vehicle
+
+| Vehicle | Wake mechanism |
+|---|---|
+| Agent tool (native roles) | The tool return is the ping. Synchronous by construction; add nothing. |
+| Registry `mcp` worker | The tool return is the ping. Synchronous. |
+| Registry `cli` worker (codex, grok, gpt-*, opencode) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
+| sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. |
+
+Claude, Codex, and Grok are all covered — not because each model is asked to be polite, but
+because the ping is emitted by the wrapper that owns the process, and only falls back to a
+model instruction where no wrapper exists.
+
+### CLI workers — runner-emitted callback
+
+```text
+autopilot-worker run <worker-id> --brief <abs> --workdir <root> \
+  --callback chat:<terminal-id> [--detach] [--yes]
+```
+
+`--callback` alone keeps the run in the foreground and pings on completion; the ping is
+belt-and-braces there. `--detach` re-execs the runner in its own session, returns
+immediately, and makes the callback the sole result channel — that is the fan-out mode.
+`--detach` requires `--callback` and, for an untrusted record, `--yes` (a detached process
+cannot prompt), so approve the resolved command before detaching.
+
+A detached run writes `<out>/<task-id>.pending.json` (task id, worker, pid, callback target,
+detached log path, start epoch, timeout) and deletes it on completion. That marker is the
+liveness probe for a task that has gone quiet: `kill -0 <pid>` still alive means wait; gone
+with the marker present means the runner died without pinging — treat as a failed dispatch
+and read the `.detached.log`.
+
+`meta.json` gains `callback: { target, delivered, error }` — `null` when none was requested.
+`delivered: false` means the wake was lost; that task will never announce itself.
+
+### sc-managed role agents — brief-embedded callback
+
+Every sc brief carries this block verbatim, in addition to the canonical dispatch fields:
+
+```xml
+<callback>
+  Your final action, after your report is complete, is exactly one command:
+  sc agent send --to id:chat:<terminal-id> --prompt "<autopilot-callback>
+  <task_id>T-###</task_id><worker>sc:<role></worker><status>success | failed</status>
+  <summary>one line</summary><artifacts>absolute paths</artifacts>
+  <instruction>Resume autopilot:orchestrate at command-loop step 7 for this task id;
+  the ledger is authoritative.</instruction></autopilot-callback>" --queue
+  --idempotency-key autopilot-T-###-a1
+  Send it once, whether you succeeded or failed. Do not send anything else, and do not
+  spawn agents, teams, or sessions.
+</callback>
+```
+
+An LLM can forget its final action, so the callback never removes the fallback: an sc task
+whose row is still awaiting past its expected duration is reconciled with
+`sc agent wait --to label:t-###-<role> --idle --timeout-ms <N>` and `sc agent read`.
+
+### Callback payload
+
+Assume the woken process is cold. Every payload is self-describing and points at files, not
+conversation memory:
+
+```xml
+<autopilot-callback>
+  <task_id>T-003</task_id>
+  <worker>codex-cli</worker>
+  <status>success | failed | timeout | aborted | error</status>
+  <exit>0</exit>
+  <workdir>/abs/project</workdir>
+  <output>/abs/project/.autopilot/artifacts/T-003.out</output>
+  <meta>/abs/project/.autopilot/artifacts/T-003.meta.json</meta>
+  <ledger>/abs/project/.autopilot/ledger.md</ledger>
+  <instruction>Resume autopilot:orchestrate at command-loop step 7 for this task id.</instruction>
+</autopilot-callback>
+```
+
+Every send uses `--queue` and an idempotency key that is unique per attempt — the runner uses
+`autopilot-<task-id>-<pid>`, an sc brief uses `autopilot-<task-id>-a<attempt>` with the
+orchestrator substituting the attempt number. One attempt therefore wakes the session exactly
+once, and a retry of the same task still wakes it.
+
+### Turn discipline
+
+- One short dispatch: run it synchronously. A callback buys nothing and costs a wake.
+- Fan-out of two or more workers, or any single worker expected to exceed the overlay's
+  `callbacks.detachThresholdSec` (default 120s): dispatch all of them detached, write an
+  `awaiting` ledger row per task recording the callback target and expected duration, then
+  **end the turn**. Do not poll, do not sleep, do not hold the session open waiting.
+- `callbacks.mode: "off"` in the overlay disables the whole mechanism: never detach, always
+  wait in-turn.
+- Never leave work running with no callback address resolved. Without a wake signal, a
+  detached process is silently lost work — run synchronously instead.
+- On wake: reconcile the ledger first, then run step-7 intake for the announced task id
+  only. Leave other `awaiting` rows awaiting and end the turn again; the last callback to
+  arrive is the one that reaches close-out.
+- Detached fan-out into one shared working tree is for read-only or non-overlapping work
+  only. Concurrent writers invalidate the checkpoint protocol — baselines, `changedFiles`,
+  and reset attribution all assume one writer. Parallel code briefs that touch overlapping
+  paths take `sc worktree create` isolation, which requires the user's explicit request.
 
 ## T1 — Design to architect
 
@@ -175,14 +299,17 @@ The canonical brief remains unchanged; this wrapper records registry selection a
   <capability>code | refactor | test | review | docs | data | security | research</capability>
   <brief_path>[absolute .autopilot/dispatch/T-###.md path]</brief_path>
   <runner>~/.autopilot/bin/autopilot-worker</runner>
-  <intake>spot-check + conditional red-team + criterion sign-off + native verifier for above-threshold code</intake>
+  <callback>chat:&lt;terminal-id&gt; | none (synchronous)</callback>
+  <mode>foreground | detached</mode>
+  <intake>spot-check + conditional red-team + criterion sign-off + native verifier (R7; always fires for external workers)</intake>
 </external_dispatch>
 ```
 
 CLI invocation:
 
 ```text
-~/.autopilot/bin/autopilot-worker run <worker-id> --brief <absolute-brief> --workdir <project-root>
+~/.autopilot/bin/autopilot-worker run <worker-id> --brief <absolute-brief> --workdir <project-root> \
+  [--callback chat:<terminal-id>] [--detach] [--yes]
 ```
 
 Subagent records use the Agent tool. MCP records use the named MCP tool with resolved
@@ -201,9 +328,13 @@ teams, or sessions.
    json` with the brief as the prompt. Consult `sc layout run --help` once per session
    for prompt-input flags; prefer file input for long briefs. Resolve
    `--provider/--model/--reasoning` from `sc layout capabilities --output json` plus the
-   effort policy in `roles.md`; never invent a model id.
-2. Wait synchronously in-turn: `sc agent wait --to label:t-###-<role> --idle
-   --timeout-ms <N> --output json`. Do not rely on background notification.
+   effort policy in `roles.md`; never invent a model id. Include the `<callback>` block from
+   the callback section, with the task id and terminal id already substituted.
+2. Collect the result one of two ways. A single short dispatch waits in-turn:
+   `sc agent wait --to label:t-###-<role> --idle --timeout-ms <N> --output json`. A fan-out,
+   or any agent expected to run for minutes, relies on the callback: mark the row `awaiting`
+   and end the turn. Either way the wake is explicit — never end a turn hoping a background
+   notification arrives on its own.
 3. Read the report with `sc agent read --to label:t-###-<role> --last <N> --output json`,
    then inspect the real artifacts on disk — the transcript is a claim, not evidence.
 4. Follow-ups — retry with attached output, revision rounds, reviewer findings — go to the
@@ -278,4 +409,8 @@ produce misleading manifests. True parallel isolation requires worktree support.
 - Independent briefs may dispatch in parallel; dependent briefs receive upstream artifacts.
 - A dispatch has significant fixed context overhead (often tens of thousands of tokens);
   batch micro-work.
-- Background processes need closed stdin, an explicit timeout, and deterministic output.
+- Background processes need closed stdin, an explicit timeout, deterministic output, and a
+  resolved callback target. A detached process with nowhere to ping back is lost work.
+- Callback idempotency keys are per run, not per task (`autopilot-<task-id>-<pid>`), so a
+  retry of the same task id still wakes the session while one run never wakes it twice. A
+  hand-written sc callback must follow the same rule: vary the key per attempt.

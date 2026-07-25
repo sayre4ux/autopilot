@@ -47,7 +47,7 @@ time. A third attempt must change worker, approach, model tier, or ask the user.
 | Document/report | Claims verified + structure checked + proofread |
 | Rules/policy | Contradiction search + red-team + read-back |
 | Unattended automation | Relevant gates + side-effect check + real run |
-| Any dispatched output | Artifact spot-check + fresh-context sign-off |
+| Any dispatched output | Artifact spot-check + criterion sign-off; verifier per R7 |
 | Numeric/factual claim | Source, or explicitly `unverified` |
 
 ## R6 — Taste
@@ -58,3 +58,24 @@ For tone, style, inferred preference, or equally correct alternatives:
 2. Produce two or three candidates and have fresh context score them against
    pre-registered criteria.
 3. If still unresolved, present the actual taste choice to the user rather than guessing.
+
+## R7 — Fresh-context verifier gate
+
+This rubric is the single source of truth for when the native `verifier` runs. `SKILL.md`,
+`command-loop.md`, and `workers.md` point here; do not restate the condition in those files.
+
+The verifier gates claims the orchestrator cannot check cheaply itself. It is not a routine
+step: an opus-class author already verifies its own work and reports gate evidence, so a
+second same-tier pass over clean evidence buys redundancy rather than assurance.
+
+Dispatch the verifier when any of these holds:
+
+1. An external worker produced the code. Cross-family output is unattested by construction.
+2. The work is security-sensitive, unattended automation, or production-critical.
+3. Reported evidence lacks output from one real run, or a criterion rests on assertion.
+4. The spot-check found a hardcoded fixture, a silently narrowed scope, or other gaming.
+5. This is retry round two or later on the same component.
+
+Otherwise the three-gate intake in `command-loop.md` step 7 stands alone. Record
+`verifier: skipped (R7)` in the ledger row. Skipping shifts weight onto the artifact
+spot-check: read the diff itself, never the report alone.

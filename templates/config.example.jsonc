@@ -43,6 +43,16 @@
   // Where setup installed the runner (setup writes this; edit only if you moved it).
   "workerRunner": "~/.autopilot/bin/autopilot-worker",
 
+  // Completion callbacks: finished workers ping back and wake the dispatching session, so a
+  // fan-out can end its turn instead of idling. "auto" uses them whenever an sc callback
+  // address resolves; "off" forces every dispatch to run synchronously in-turn.
+  // detachThresholdSec: a single worker expected to run longer than this is detached rather
+  // than waited on; any fan-out of two or more is detached regardless.
+  "callbacks": {
+    "mode": "auto",
+    "detachThresholdSec": 120
+  },
+
   // --- ILLUSTRATIVE machine-specific entry (allowed here ONLY, never in shipped defaults) ---
   // Personal environment quirks the orchestrator should know about. Example:
   // "environmentNotes": "Python is managed by uv (never pip/venv); Node by fnm (never nvm)."

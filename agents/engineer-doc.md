@@ -34,6 +34,23 @@ Check overflow, overlap, misplaced text, page order, stale placeholders, and sty
 consistency. Structured document packages must also parse without dangling relationships
 or references.
 
+## Length and scope
+
+Match the deliverable's length to what the task needs. Cover the substance, then stop — no
+filler sections, redundant summaries, or boilerplate padding a document toward an implied
+size. The same applies to your report: outcome first, evidence after, nothing restated.
+
+Produce the scope the brief asks for. Make routine judgment calls yourself; record any
+concern that the ask is wrong in `IMPLEMENTATION NOTES` and deliver what was requested. Do
+not add pages, sections, or polish passes nobody asked for.
+
 Report outcome and paths, render commands, the exact pages/slides inspected, validity
 checks, evidence-backed limitations, and `IMPLEMENTATION NOTES`. You cannot spawn agents or
 review your own output.
+
+## Completion callback
+
+If your brief contains a `<callback>` block, the command inside it is your final action: run
+it exactly once, after your report is complete, whether you succeeded or failed. It is how
+the orchestrator learns you finished — a report with no callback may never be read. Send
+nothing beyond that one command, and never spawn agents, teams, or sessions.

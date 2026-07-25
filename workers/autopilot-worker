@@ -50,10 +50,105 @@ TOP_LEVEL_KEYS = {
 TEMPLATE_PATTERN = re.compile(
     r"\$\{(task_id|brief_path|prompt|workdir|output_dir|output_file)\}"
 )
+TARGET_PREFIXES = ("id:", "label:", "group:", "view:", "tab:", "pane:", "chat:")
+EXIT_STATUS = {
+    0: "success",
+    EXIT_WORKER_FAILED: "failed",
+    EXIT_REGISTRY_ERROR: "error",
+    EXIT_ABORTED: "aborted",
+    EXIT_TIMEOUT: "timeout",
+}
 
 
 class RegistryError(ValueError):
     pass
+
+
+def _normalize_target(target: str) -> str:
+    """Accept a bare stable target id or an already-qualified sc selector."""
+    if target.startswith(TARGET_PREFIXES) and not target.startswith("chat:"):
+        return target
+    return f"id:{target}"
+
+
+def _callback_payload(
+    task_id: str,
+    worker: str,
+    status: str,
+    exit_code: int,
+    workdir: Path,
+    output_path: Path,
+    meta_path: Path,
+    detail: str | None = None,
+) -> str:
+    lines = [
+        "<autopilot-callback>",
+        f"  <task_id>{task_id}</task_id>",
+        f"  <worker>{worker}</worker>",
+        f"  <status>{status}</status>",
+        f"  <exit>{exit_code}</exit>",
+        f"  <workdir>{workdir}</workdir>",
+        f"  <output>{output_path}</output>",
+        f"  <meta>{meta_path}</meta>",
+        f"  <ledger>{workdir / '.autopilot' / 'ledger.md'}</ledger>",
+    ]
+    if detail:
+        lines.append(f"  <detail>{detail}</detail>")
+    lines += [
+        "  <instruction>An Autopilot worker finished. Resume the autopilot:orchestrate",
+        "  skill at command-loop step 7 (three-gate intake) for this task id. Read the meta",
+        "  and output files above, then inspect the real artifacts. The ledger is",
+        "  authoritative: reconcile its row before acting, and never re-dispatch a task",
+        "  already marked done. If other rows are still awaiting, do not block on them.",
+        "  </instruction>",
+        "</autopilot-callback>",
+    ]
+    return "\n".join(lines)
+
+
+def _send_callback(target: str, task_id: str, payload: str) -> dict[str, Any]:
+    """Wake the dispatching session. Never raises; never changes the run's exit code."""
+    # Keyed per run, not per task: a retry of the same task id must still wake the session,
+    # while a re-sent callback from one run stays a single wake.
+    key = f"autopilot-{task_id}-{os.getpid()}"
+    result: dict[str, Any] = {
+        "target": target, "idempotencyKey": key, "delivered": False, "error": None,
+    }
+    sc = shutil.which("sc")
+    if sc is None:
+        result["error"] = "sc not on PATH"
+        return result
+    argv = [
+        sc, "agent", "send",
+        "--to", _normalize_target(target),
+        "--prompt", payload,
+        "--queue",
+        "--idempotency-key", key,
+        "--output", "json",
+    ]
+    try:
+        completed = subprocess.run(argv, capture_output=True, text=True, timeout=30)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        result["error"] = f"sc agent send failed: {exc}"
+        return result
+    if completed.returncode == 0:
+        result["delivered"] = True
+    else:
+        detail = (completed.stderr.strip() or completed.stdout.strip())[:400]
+        result["error"] = f"sc agent send exit {completed.returncode}: {detail}"
+    return result
+
+
+def _record_callback(meta_path: Path, callback: dict[str, Any]) -> None:
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return
+    meta["callback"] = callback
+    try:
+        meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _require_type(value: Any, expected: type, field: str) -> None:
@@ -346,6 +441,7 @@ def _write_result(
     changed_files: list[str] | None = None,
     new_untracked: list[str] | None = None,
     manifest_complete: bool = False,
+    callback: dict[str, Any] | None = None,
 ) -> None:
     output_path.write_text(content, encoding="utf-8")
     meta = {
@@ -359,25 +455,35 @@ def _write_result(
         "changedFiles": changed_files or [],
         "untrackedFiles": new_untracked or [],
         "manifestComplete": manifest_complete,
+        "callback": callback,
     }
     meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
 
 
-def _run(args: argparse.Namespace) -> int:
+def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, str, Path, Path, Path]:
     brief = Path(args.brief)
     if not brief.is_absolute() or not brief.is_file():
         raise RegistryError("--brief must name an existing absolute file")
     workdir = Path(args.workdir).resolve()
     if not workdir.is_dir():
         raise RegistryError("--workdir must name an existing directory")
-
     output_dir = Path(args.out).resolve() if args.out else workdir / ".autopilot" / "artifacts"
     output_dir.mkdir(parents=True, exist_ok=True)
     task_id = brief.stem
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", task_id):
         raise RegistryError("brief filename does not yield a safe task id")
-    output_path = output_dir / f"{task_id}.out"
-    meta_path = output_dir / f"{task_id}.meta.json"
+    return (
+        brief,
+        workdir,
+        task_id,
+        output_dir / f"{task_id}.out",
+        output_dir / f"{task_id}.meta.json",
+        output_dir / f"{task_id}.pending.json",
+    )
+
+
+def _run(args: argparse.Namespace) -> int:
+    brief, workdir, task_id, output_path, meta_path, _ = _resolve_paths(args)
     output_path.unlink(missing_ok=True)
     meta_path.unlink(missing_ok=True)
     prompt = brief.read_text(encoding="utf-8")
@@ -388,7 +494,7 @@ def _run(args: argparse.Namespace) -> int:
         "brief_path": str(brief),
         "prompt": prompt,
         "workdir": str(workdir),
-        "output_dir": str(output_dir),
+        "output_dir": str(output_path.parent),
         "output_file": str(output_path),
     }
     cli = record["cli"]
@@ -498,6 +604,57 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _detach(args: argparse.Namespace) -> int:
+    """Re-exec this runner in its own session so it outlives the dispatching turn."""
+    _, workdir, task_id, _, _, pending_path = _resolve_paths(args)
+    record = _load_worker(args.worker_id, workdir)
+    if not record.get("trusted", False) and not args.yes:
+        raise RegistryError(
+            "--detach cannot prompt for approval; approve the resolved command and pass --yes"
+        )
+    log_path = pending_path.with_suffix(".detached.log")
+    argv = [sys.executable, str(Path(__file__).resolve()), "run", args.worker_id,
+            "--brief", args.brief, "--workdir", args.workdir,
+            "--callback", args.callback, "--yes"]
+    if args.out:
+        argv += ["--out", args.out]
+    if args.timeout is not None:
+        argv += ["--timeout", str(args.timeout)]
+    with open(log_path, "wb") as log:
+        child = subprocess.Popen(
+            argv,
+            cwd=workdir,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    pending_path.write_text(
+        json.dumps(
+            {
+                "taskId": task_id,
+                "worker": record["id"],
+                "pid": child.pid,
+                "callback": args.callback,
+                "log": str(log_path),
+                "startedAtEpoch": int(time.time()),
+                "timeoutSec": args.timeout
+                if args.timeout is not None
+                else record["cli"]["timeoutSec"],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(
+        f"Detached {record['id']} for {task_id} as pid {child.pid}; "
+        f"callback -> {args.callback}",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def _reset(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     if not workdir.is_dir():
@@ -518,8 +675,10 @@ def _reset(args: argparse.Namespace) -> int:
         raise RegistryError(f"git reset failed: {result.stderr.strip()}")
     suffix = ""
     if args.clean:
+        # -e .autopilot/: the ledger, briefs, and artifacts are the harness's own memory.
+        # They survive here even when the project forgot to gitignore them.
         clean_result = subprocess.run(
-            ["git", "clean", "-fd"],
+            ["git", "clean", "-fd", "-e", ".autopilot/"],
             cwd=workdir, capture_output=True, text=True, timeout=30,
         )
         if clean_result.returncode == 0:
@@ -544,6 +703,15 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--out")
     run.add_argument("--timeout", type=int)
     run.add_argument("--yes", action="store_true")
+    run.add_argument(
+        "--callback",
+        help="sc target to wake when the run finishes, e.g. chat:<terminal-id>",
+    )
+    run.add_argument(
+        "--detach",
+        action="store_true",
+        help="run in a detached session and return immediately; requires --callback",
+    )
     reset_cmd = subparsers.add_parser("reset")
     reset_cmd.add_argument("--to", required=True)
     reset_cmd.add_argument("--workdir", required=True)
@@ -552,19 +720,45 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    args = None
     try:
         args = _parser().parse_args()
         if args.subcommand == "reset":
             return _reset(args)
         if args.timeout is not None and not 1 <= args.timeout <= 3600:
             raise RegistryError("--timeout must be between 1 and 3600")
-        return _run(args)
+        if args.detach and not args.callback:
+            raise RegistryError("--detach requires --callback; otherwise the result is lost")
+        if args.detach:
+            return _detach(args)
+        code = _run(args)
+        detail = None
     except RegistryError as exc:
         print(f"Registry/record error: {exc}", file=sys.stderr)
-        return EXIT_REGISTRY_ERROR
+        code, detail = EXIT_REGISTRY_ERROR, str(exc)
     except Exception as exc:
         print(f"Registry/record error: unexpected runner error: {exc}", file=sys.stderr)
-        return EXIT_REGISTRY_ERROR
+        code, detail = EXIT_REGISTRY_ERROR, f"unexpected runner error: {exc}"
+
+    # The callback is the only wake signal a detached run has: fire it on every path,
+    # including registry errors that produced no artifacts, and never let it alter `code`.
+    if args is not None and getattr(args, "callback", None):
+        try:
+            _, workdir, task_id, output_path, meta_path, pending_path = _resolve_paths(args)
+        except RegistryError:
+            workdir, task_id = Path(args.workdir), Path(args.brief).stem
+            output_path = meta_path = pending_path = Path("(unresolved)")
+        payload = _callback_payload(
+            task_id, args.worker_id, EXIT_STATUS.get(code, "error"), code,
+            workdir, output_path, meta_path, detail,
+        )
+        result = _send_callback(args.callback, task_id, payload)
+        if meta_path.is_file():
+            _record_callback(meta_path, result)
+        pending_path.unlink(missing_ok=True)
+        if not result["delivered"]:
+            print(f"Callback not delivered: {result['error']}", file=sys.stderr)
+    return code
 
 
 if __name__ == "__main__":

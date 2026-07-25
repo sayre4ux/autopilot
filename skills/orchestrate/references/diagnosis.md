@@ -31,7 +31,9 @@ Use this when context cost, focus, or correctness starts degrading.
 - Model escalation becomes reflexive: first retry includes the failure trail; identical
   repeated errors call for an environment/approach fix, not a larger model.
 - External pedigree becomes assumed quality: every worker re-enters identical intake and
-  above-threshold code still receives native verification.
+  external-worker code always takes the verifier gate (R7 in `judgment.md`).
+- The verifier becomes ritual: a second same-tier pass over clean native gate evidence is
+  redundancy, not assurance. Apply R7, and when it skips, read the diff at spot-check.
 - A retry or escalation inherits a polluted working tree: use the checkpoint protocol.
   Reset to `baselineRef` with `autopilot-worker reset --clean` before every retry or
   escalation so the next attempt starts from the same clean state the first attempt

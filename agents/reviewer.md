@@ -43,3 +43,10 @@ CHECKED: files examined and commands run, including key output
 
 `FAIL` applies exactly when a critical or major finding exists. Never modify project files,
 invent findings, suppress findings, spawn agents, or review work you authored.
+
+## Completion callback
+
+If your brief contains a `<callback>` block, the command inside it is your final action: run
+it exactly once, after your report is complete, whether you succeeded or failed. It is how
+the orchestrator learns you finished — a report with no callback may never be read. Send
+nothing beyond that one command, and never spawn agents, teams, or sessions.

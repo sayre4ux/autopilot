@@ -1,7 +1,8 @@
 # External worker layer
 
 External workers are optional execution routes. Native agents remain the guaranteed floor.
-Worker pedigree never bypasses intake or verification.
+Worker pedigree never bypasses intake, and external-worker code always takes the verifier
+gate (R7 in `judgment.md`).
 
 ## Registry and precedence
 
@@ -22,8 +23,9 @@ Read on every job, tolerating absence:
 3. `<project>/.autopilot/config.jsonc`.
 
 Higher-level keys replace lower-level values; absent keys inherit. Overlays may change
-per-role alias/effort, `reviewDefault`, worker enablement/order, and `workerRunner`. They
-cannot select the main-session model.
+per-role alias/effort, `reviewDefault`, worker enablement/order, `workerRunner`, and
+`callbacks` (`mode`: `auto` | `off`; `detachThresholdSec`). They cannot select the
+main-session model.
 
 ## Selection
 
@@ -43,6 +45,8 @@ autopilot-worker run <worker-id>
   [--out <directory>]
   [--timeout <seconds>]
   [--yes]
+  [--callback <sc-target>]
+  [--detach]
 
 autopilot-worker reset
   --to <git-ref>
@@ -56,9 +60,12 @@ The `run` subcommand resolves project over global registry records. The runner s
 approval; `--yes` is reserved for an already approved invocation.
 
 The `reset` subcommand validates the ref as a commit, runs `git reset --hard`, and
-optionally `git clean -fd` with `--clean`. It assumes `--workdir` is the git repository
-toplevel; behavior in a subdirectory of an enclosing repo is undefined — document the
-monorepo case if it arises.
+optionally `git clean -fd -e .autopilot/` with `--clean`. The exclusion keeps the ledger,
+briefs, and artifacts alive even in a project that never gitignored them — it is a backstop,
+not a licence to skip the `.gitignore` step, which still protects them from `git stash
+--include-untracked` and from any hand-run `git clean`. It assumes `--workdir` is the git
+repository toplevel; behavior in a subdirectory of an enclosing repo is undefined — document
+the monorepo case if it arises.
 
 Runner exits:
 
@@ -68,9 +75,23 @@ Runner exits:
 - `4`: untrusted command declined (`run` only).
 - `124`: timeout and process termination (`run` only).
 
+`--callback` names the sc target to wake when the run finishes; the runner sends it on every
+exit path, including timeout and registry error, and the send never changes the run's exit
+code. `--detach` re-execs the runner in its own session and returns 0 immediately, making the
+callback the only result channel — it therefore requires `--callback`, and requires `--yes`
+for an untrusted record because a detached process cannot prompt for approval. Full protocol,
+including who pings back for each vehicle and the turn discipline it enables, is in
+`dispatch.md`.
+
 It writes `<out>/<task-id>.out` and `<out>/<task-id>.meta.json`. Metadata records worker,
 resolved command, worker exit, duration, timeout state, output byte count, `baselineRef`,
-`changedFiles`, `untrackedFiles`, and `manifestComplete`. `changedFiles` includes files the
+`changedFiles`, `untrackedFiles`, `manifestComplete`, and `callback`
+(`{ target, idempotencyKey, delivered, error }`, or `null` when none was requested). A
+`delivered: false` callback means the wake was lost and that task will never announce itself.
+A detached run additionally writes `<out>/<task-id>.pending.json` while it is alive and a
+`<task-id>.pending.detached.log` holding the runner's own stderr; the pending marker carries
+the pid, so a quiet task is probed with `kill -0 <pid>` rather than guessed at.
+`changedFiles` includes files the
 worker committed (via `baseline..HEAD` diff), not only uncommitted modifications.
 `manifestComplete: false` means a git command failed or timed out; the manifest is
 incomplete and should not be used for overlap analysis.
@@ -99,6 +120,11 @@ should be aware that `autopilot-worker reset` executes directly. The subcommand 
 
 Normalize all paths to `{ outcome, artifacts[], exit, evidence }`.
 
+Wake responsibility differs by path. Agent-tool and MCP dispatch are synchronous — the tool
+return is the ping. CLI dispatch takes `--callback`, and `--detach` when fanning out. The sc
+path carries the callback instruction inside the brief. See the callback section of
+`dispatch.md`; no path may end a turn with work running and no wake signal.
+
 ## Intake and escalation
 
 All workers receive the identical self-contained brief. On return:
@@ -106,7 +132,8 @@ All workers receive the identical self-contained brief. On return:
 1. Spot-check the artifacts, not only the report.
 2. Red-team when policy, unattended execution, user data, or security warrants it.
 3. Check every criterion against actual evidence.
-4. Send above-threshold code to native `verifier` for `CONFIRMED`/`REFUTED`.
+4. Send code to native `verifier` for `CONFIRMED`/`REFUTED` when R7 in `judgment.md` fires.
+   External-worker code always fires R7 — worker pedigree never substitutes for the gate.
 
 First failure retries the same worker with `.out` and `.meta.json` included. Second failure
 escalates to native engineer or security-engineer with the full trail. There is no third
@@ -120,7 +147,8 @@ role and trust considerations.
 A null `baselineRef` means no checkpoint was taken (non-git directory or a repo before its
 first commit). Skip the reset protocol when baselineRef is null.
 
-On worker failure, timeout, or `REFUTED` verification, the correct sequence is:
+On worker failure, timeout, `REFUTED` verification, or — when R7 skipped the verifier — a
+criterion that fails sign-off at intake, the correct sequence is:
 
 1. Reset and clean: `autopilot-worker reset --to <baselineRef> --workdir <root> --clean`.
    Cleaning before the stash pop is safe because stashed files live inside the stash object.

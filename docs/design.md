@@ -77,6 +77,24 @@ Runner exits are `0` success, `2` worker/output failure, `3` registry/record/com
 `4` declined approval, and `124` timeout. The runner executes only CLI records; the
 orchestrator owns subagent and MCP invocation.
 
+### Completion callback
+
+A dispatched worker must be able to wake the session that dispatched it. The orchestrator
+resolves its own sc target once per job and passes it down; whoever owns the worker's process
+emits the ping when that process ends. For CLI workers that is the runner, which sends on
+every exit path and records `callback: { target, idempotencyKey, delivered, error }` in
+metadata; `--detach` re-execs the runner in its own session so the dispatching turn can end
+while the worker runs. For sc-managed role agents there is no wrapper, so the brief carries
+the send command as a mandatory final action with `sc agent wait` as fallback. Agent-tool and
+MCP dispatch need nothing — the tool return is the ping.
+
+The design point is that the guarantee lives in the wrapper, not in the worker's goodwill:
+Claude, Codex, and Grok are all covered identically because none of them is trusted to
+remember. It exists because the driving session is often headless (`claude -p`), where the
+process exits at turn end and a queued callback is the only thing that restarts it. Without a
+resolved callback address the harness stays fully synchronous, which is the older behavior and
+always correct.
+
 ### Intake
 
 Every producer passes:
@@ -84,7 +102,7 @@ Every producer passes:
 1. Artifact spot-check for gaming and unsupported limitations.
 2. Conditional fresh-context red-team.
 3. Criterion-by-criterion sign-off using real evidence.
-4. Native verification for above-threshold code.
+4. Native verification when R7 fires — always for external-worker code.
 
 Review is independently optional. It selects a review-capable worker from another model
 family when possible, otherwise the native reviewer. Only critical/major findings trigger a
