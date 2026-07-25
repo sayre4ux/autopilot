@@ -39,10 +39,10 @@ for approval, backs up user settings once, and applies only approved key/file ch
 | Agent | Alias / effort | Boundary |
 |---|---|---|
 | architect | opus / high | Designs and arbitrates; no production code |
-| engineer | sonnet / medium | Code, scripts, data |
+| engineer | opus / high | Code, scripts, data |
 | engineer-doc | opus / high | Visual/doc work with render inspection |
-| security-engineer | opus / high | Security-sensitive work |
-| verifier | opus / medium | Refutes or confirms; never fixes |
+| security-engineer | opus / xhigh | Security-sensitive work |
+| verifier | opus / xhigh | Refutes or confirms; never fixes |
 | reviewer | opus / high | Severity findings; never fixes |
 
 Global and project overlays can override these values per Agent call. Model identifiers

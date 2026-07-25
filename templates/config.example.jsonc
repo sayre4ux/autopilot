@@ -3,12 +3,17 @@
   // <project>/.autopilot/config.jsonc (project). Every key is optional; absent = shipped default.
 
   // Per-role overrides. Aliases only (opus/sonnet/haiku) — never dated model ids.
-  // Effort policy: opus on 4.8[1m] -> xhigh, opus on 4.6[1m] -> high (4.6 has no xhigh);
-  // never run sonnet or opus below high. Mixed-model roles keep a high floor and the
-  // orchestrator lifts to xhigh when opus resolves to 4.8 (see roles.md).
+  // Effort policy: every delegated role runs at high or above — a subagent gets one shot
+  // with no interactive correction — and xhigh is reserved for the adversarial roles
+  // (security-engineer, verifier). Effort no longer branches on model generation; the
+  // retired 4.8/4.6 lift-and-clamp rule is documented as legacy in roles.md.
+  // effort is a subagent frontmatter field (values low|medium|high|xhigh|max, model-
+  // dependent) that overrides the session effort while the agent runs. The Agent tool has no
+  // per-call effort argument, so these values land via the definition or sc --reasoning,
+  // not an Agent-tool call.
   "roles": {
     "architect":         { "model": "opus",   "effort": "high"  },
-    "engineer":          { "model": "sonnet", "effort": "high"  },
+    "engineer":          { "model": "opus",   "effort": "high"  },
     "engineer-doc":      { "model": "opus",   "effort": "high"  },
     "security-engineer": { "model": "opus",   "effort": "xhigh" },
     "verifier":          { "model": "opus",   "effort": "xhigh" },

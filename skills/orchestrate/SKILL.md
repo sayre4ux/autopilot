@@ -56,13 +56,22 @@ invocation may orchestrate those and routes implementation to `engineer-doc`.
 Read, if present, `~/.autopilot/config.jsonc`, then
 `<project>/.autopilot/config.jsonc`; project values override global values. Tolerate
 absence. Read worker records from both registry locations with project ids overriding
-global ids. Apply role alias/effort overlays as dispatch-call overrides.
+global ids. Apply role alias/effort overlays per `references/roles.md`: model as the Agent
+tool's per-call override, effort via the definition frontmatter or sc `--reasoning`.
 
 Detect sc-managed orchestration once per job: if the `sc` CLI is on PATH and
 `sc agents list --output json` succeeds, super.engineering agent orchestration is
 available — role dispatches route through the sc-managed path in
 `references/dispatch.md`. If detection fails, or any later sc call fails, fall through to
 Agent-tool/registry dispatch and log the degradation; never retry sc ritualistically.
+
+If the codebase-memory MCP is available, use it as the primary code-discovery tool for
+this job. Before decomposition, ensure the target project is indexed: check `index_status`,
+run `index_repository` once if it is absent, and `detect_changes` to refresh a stale index.
+Prefer graph queries (`search_graph`/`search_code`, `trace_path`, `get_code_snippet`,
+`get_architecture`) over grep sweeps for scoping and impact analysis, and every dispatch
+brief tells its agent to do the same. Degrade to Explore/grep when the MCP is unavailable or
+the project cannot be indexed; a missing index never blocks the loop.
 
 Run the ten steps in `references/command-loop.md`. Use:
 
