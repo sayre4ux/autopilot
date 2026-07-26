@@ -1,0 +1,13 @@
+{
+  "model": "best",
+  "fallbackModel": [
+    "opus",
+    "sonnet"
+  ],
+  "availableModels": [
+    "best",
+    "opus",
+    "sonnet",
+    "haiku"
+  ]
+}

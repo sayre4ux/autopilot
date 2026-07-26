@@ -1,0 +1,571 @@
+#!/usr/bin/env python3
+"""Registry-driven runner for Autopilot CLI workers."""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from typing import Any
+
+
+EXIT_WORKER_FAILED = 2
+EXIT_REGISTRY_ERROR = 3
+EXIT_ABORTED = 4
+EXIT_TIMEOUT = 124
+CAPABILITIES = {
+    "code",
+    "refactor",
+    "test",
+    "review",
+    "docs",
+    "data",
+    "security",
+    "research",
+}
+TOP_LEVEL_KEYS = {
+    "id",
+    "type",
+    "displayName",
+    "enabled",
+    "capabilities",
+    "modelFamily",
+    "preferWhen",
+    "avoidWhen",
+    "trusted",
+    "subagent",
+    "cli",
+    "output",
+    "mcp",
+}
+TEMPLATE_PATTERN = re.compile(
+    r"\$\{(task_id|brief_path|prompt|workdir|output_dir|output_file)\}"
+)
+
+
+class RegistryError(ValueError):
+    pass
+
+
+def _require_type(value: Any, expected: type, field: str) -> None:
+    if not isinstance(value, expected) or (expected is int and isinstance(value, bool)):
+        raise RegistryError(f"{field} has the wrong type")
+
+
+def _validate_record(record: Any, source: Path) -> dict[str, Any]:
+    if not isinstance(record, dict):
+        raise RegistryError(f"{source}: record must be an object")
+    extra = set(record) - TOP_LEVEL_KEYS
+    if extra:
+        raise RegistryError(f"{source}: unknown field(s): {', '.join(sorted(extra))}")
+
+    for field in ("id", "type", "capabilities"):
+        if field not in record:
+            raise RegistryError(f"{source}: missing required field {field}")
+    _require_type(record["id"], str, "id")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", record["id"]):
+        raise RegistryError(f"{source}: invalid worker id")
+    if record["type"] not in {"subagent", "cli", "mcp"}:
+        raise RegistryError(f"{source}: invalid worker type")
+    if not isinstance(record["capabilities"], list) or not record["capabilities"]:
+        raise RegistryError(f"{source}: capabilities must be a non-empty array")
+    if any(item not in CAPABILITIES for item in record["capabilities"]):
+        raise RegistryError(f"{source}: invalid capability")
+    for field in ("displayName", "modelFamily", "preferWhen", "avoidWhen"):
+        if field in record:
+            _require_type(record[field], str, field)
+    for field in ("enabled", "trusted"):
+        if field in record:
+            _require_type(record[field], bool, field)
+
+    record_type = record["type"]
+    variant = record.get(record_type)
+    if not isinstance(variant, dict):
+        raise RegistryError(f"{source}: {record_type} record requires {record_type} object")
+    forbidden = {"subagent", "cli", "mcp"} - {record_type}
+    if any(field in record for field in forbidden):
+        raise RegistryError(f"{source}: record contains fields for multiple worker types")
+
+    if record_type == "cli":
+        required = {"command", "args", "promptDelivery", "timeoutSec", "successExitCodes"}
+        allowed = required | {"cwd", "env"}
+        missing = required - set(variant)
+        extra = set(variant) - allowed
+        if missing or extra:
+            raise RegistryError(
+                f"{source}: cli fields invalid; missing={sorted(missing)}, extra={sorted(extra)}"
+            )
+        _require_type(variant["command"], str, "cli.command")
+        if not isinstance(variant["args"], list) or not all(
+            isinstance(item, str) for item in variant["args"]
+        ):
+            raise RegistryError(f"{source}: cli.args must be an array of strings")
+        if variant["promptDelivery"] not in {"arg", "stdin", "file"}:
+            raise RegistryError(f"{source}: invalid cli.promptDelivery")
+        _require_type(variant["timeoutSec"], int, "cli.timeoutSec")
+        if not 1 <= variant["timeoutSec"] <= 3600:
+            raise RegistryError(f"{source}: cli.timeoutSec is out of range")
+        if not isinstance(variant["successExitCodes"], list) or not all(
+            isinstance(item, int) and not isinstance(item, bool)
+            for item in variant["successExitCodes"]
+        ):
+            raise RegistryError(f"{source}: successExitCodes must be integers")
+        if "cwd" in variant:
+            _require_type(variant["cwd"], str, "cli.cwd")
+        if "env" in variant and (
+            not isinstance(variant["env"], dict)
+            or not all(
+                isinstance(key, str) and isinstance(value, str)
+                for key, value in variant["env"].items()
+            )
+        ):
+            raise RegistryError(f"{source}: cli.env must map strings to strings")
+        if "output" in record:
+            output = record["output"]
+            if not isinstance(output, dict):
+                raise RegistryError(f"{source}: output must be an object")
+            extra_output = set(output) - {"channel", "format", "resultPointer"}
+            if extra_output:
+                raise RegistryError(
+                    f"{source}: unknown output field(s): {', '.join(sorted(extra_output))}"
+                )
+            if output.get("channel", "stdout") not in {"stdout", "file", "worktree"}:
+                raise RegistryError(f"{source}: invalid output.channel")
+            if output.get("format", "text") not in {"text", "json"}:
+                raise RegistryError(f"{source}: invalid output.format")
+            if "resultPointer" in output and not (
+                isinstance(output["resultPointer"], str) or output["resultPointer"] is None
+            ):
+                raise RegistryError(f"{source}: output.resultPointer must be a string or null")
+    elif record_type == "subagent":
+        required = {"subagentType"}
+        allowed = required | {"model", "effort"}
+        if required - set(variant) or set(variant) - allowed:
+            raise RegistryError(f"{source}: invalid subagent fields")
+        _require_type(variant["subagentType"], str, "subagent.subagentType")
+        if "model" in variant and not (
+            isinstance(variant["model"], str) or variant["model"] is None
+        ):
+            raise RegistryError(f"{source}: subagent.model must be a string or null")
+        if variant.get("effort") not in {None, "low", "medium", "high", "xhigh"}:
+            raise RegistryError(f"{source}: invalid subagent.effort")
+    else:
+        required = {"tool", "argsTemplate", "timeoutSec"}
+        allowed = required | {"resultField"}
+        if required - set(variant) or set(variant) - allowed:
+            raise RegistryError(f"{source}: invalid mcp fields")
+        _require_type(variant["tool"], str, "mcp.tool")
+        _require_type(variant["argsTemplate"], dict, "mcp.argsTemplate")
+        _require_type(variant["timeoutSec"], int, "mcp.timeoutSec")
+        if not 1 <= variant["timeoutSec"] <= 3600:
+            raise RegistryError(f"{source}: mcp.timeoutSec is out of range")
+        if "resultField" in variant and not (
+            isinstance(variant["resultField"], str) or variant["resultField"] is None
+        ):
+            raise RegistryError(f"{source}: mcp.resultField must be a string or null")
+    return record
+
+
+def _load_directory(directory: Path, records: dict[str, dict[str, Any]]) -> None:
+    if not directory.is_dir():
+        return
+    for path in sorted(directory.glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise RegistryError(f"{path}: cannot read record: {exc}") from exc
+        validated = _validate_record(record, path)
+        records[validated["id"]] = validated
+
+
+def _load_worker(worker_id: str, workdir: Path) -> dict[str, Any]:
+    records: dict[str, dict[str, Any]] = {}
+    _load_directory(Path.home() / ".autopilot" / "workers", records)
+    _load_directory(workdir / ".autopilot" / "workers", records)
+    if worker_id not in records:
+        raise RegistryError(f"unknown worker id: {worker_id}")
+    record = records[worker_id]
+    if not record.get("enabled", True):
+        raise RegistryError(f"worker is disabled: {worker_id}")
+    if record["type"] != "cli":
+        raise RegistryError(
+            f"worker {worker_id!r} has type {record['type']!r}; only cli workers run here"
+        )
+    return record
+
+
+def _substitute(value: str, variables: dict[str, str]) -> str:
+    return TEMPLATE_PATTERN.sub(lambda match: variables[match.group(1)], value)
+
+
+def _json_pointer(value: Any, dotted_path: str | None) -> Any:
+    if not dotted_path:
+        return value
+    current = value
+    for part in dotted_path.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            raise ValueError(f"result pointer not found: {dotted_path}")
+    return current
+
+
+def _matching_files(pattern: str, workdir: Path) -> list[Path]:
+    if not os.path.isabs(pattern):
+        pattern = str(workdir / pattern)
+    return sorted(Path(path) for path in glob.glob(pattern, recursive=True) if Path(path).is_file())
+
+
+def _snapshot(pattern: str, workdir: Path) -> dict[Path, tuple[int, int]]:
+    return {
+        path: (path.stat().st_mtime_ns, path.stat().st_size)
+        for path in _matching_files(pattern, workdir)
+    }
+
+
+def _git_lines(workdir: Path, *args: str) -> list[str]:
+    nul_delimited = "-z" in args
+    result = subprocess.run(
+        ["git", *args],
+        cwd=workdir, capture_output=True, timeout=10,
+    )
+    if result.returncode != 0:
+        return []
+    text = result.stdout.decode("utf-8", errors="replace")
+    sep = "\0" if nul_delimited else "\n"
+    return [entry for entry in text.strip(sep).split(sep) if entry]
+
+
+def _git_baseline(workdir: Path) -> dict[str, Any] | None:
+    try:
+        ref = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=workdir, capture_output=True, timeout=10,
+        )
+        if ref.returncode != 0:
+            return None
+        return {
+            "ref": ref.stdout.decode("utf-8", errors="replace").strip(),
+            "tracked": _git_lines(workdir, "diff", "--name-only", "-z"),
+            "staged": _git_lines(workdir, "diff", "--staged", "--name-only", "-z"),
+            "untracked": _git_lines(
+                workdir, "ls-files", "--others", "--exclude-standard", "-z",
+            ),
+        }
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def _git_changed_after(
+    workdir: Path, baseline: dict[str, Any] | None,
+) -> tuple[list[str], list[str], bool]:
+    if baseline is None:
+        return [], [], False
+    try:
+        current_modified = set(_git_lines(workdir, "diff", "--name-only", "-z"))
+        current_staged = set(_git_lines(workdir, "diff", "--staged", "--name-only", "-z"))
+        current_untracked = set(
+            _git_lines(workdir, "ls-files", "--others", "--exclude-standard", "-z"),
+        )
+        committed = set(_git_lines(
+            workdir, "diff", "--name-only", "-z", baseline["ref"] + "..HEAD",
+        ))
+        before_modified = set(baseline.get("tracked", []))
+        before_staged = set(baseline.get("staged", []))
+        before_untracked = set(baseline.get("untracked", []))
+        new_working = (current_modified | current_staged) - (before_modified | before_staged)
+        changed = sorted(new_working | committed)
+        new_untracked = sorted(current_untracked - before_untracked)
+        return changed, new_untracked, True
+    except (subprocess.TimeoutExpired, OSError):
+        return [], [], False
+
+
+def _render_output(
+    record: dict[str, Any],
+    stdout: str,
+    stderr: str,
+    variables: dict[str, str],
+    workdir: Path,
+    worktree_before: dict[Path, tuple[int, int]] | None,
+) -> tuple[str, bool]:
+    output = record.get("output", {})
+    channel = output.get("channel", "stdout")
+    format_name = output.get("format", "text")
+    pointer = output.get("resultPointer")
+
+    if channel == "stdout":
+        raw = stdout
+    elif channel == "file":
+        target_template = pointer or variables["output_file"]
+        target = Path(_substitute(target_template, variables))
+        if not target.is_absolute():
+            target = workdir / target
+        raw = target.read_text(encoding="utf-8") if target.is_file() else ""
+    else:
+        pattern = _substitute(pointer or "**/*", variables)
+        current = _matching_files(pattern, workdir)
+        matches = [
+            path
+            for path in current
+            if worktree_before is None
+            or path not in worktree_before
+            or (path.stat().st_mtime_ns, path.stat().st_size) != worktree_before[path]
+        ]
+        raw = "\n".join(str(path.relative_to(workdir)) for path in matches)
+
+    if format_name == "json" and raw:
+        extracted = _json_pointer(json.loads(raw), pointer if channel == "stdout" else None)
+        raw = extracted if isinstance(extracted, str) else json.dumps(extracted, indent=2)
+
+    captured = raw
+    if stderr:
+        captured += ("\n" if captured else "") + "[stderr]\n" + stderr
+    return captured, bool(raw.strip())
+
+
+def _write_result(
+    output_path: Path,
+    meta_path: Path,
+    content: str,
+    worker: str,
+    resolved_command: str,
+    worker_exit: int | None,
+    duration: float,
+    timed_out: bool,
+    baseline_ref: str | None = None,
+    changed_files: list[str] | None = None,
+    new_untracked: list[str] | None = None,
+    manifest_complete: bool = False,
+) -> None:
+    output_path.write_text(content, encoding="utf-8")
+    meta = {
+        "worker": worker,
+        "resolvedCommand": resolved_command,
+        "exit": worker_exit,
+        "durationSec": round(duration, 3),
+        "timedOut": timed_out,
+        "outputBytes": len(content.encode("utf-8")),
+        "baselineRef": baseline_ref,
+        "changedFiles": changed_files or [],
+        "untrackedFiles": new_untracked or [],
+        "manifestComplete": manifest_complete,
+    }
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+
+
+def _run(args: argparse.Namespace) -> int:
+    brief = Path(args.brief)
+    if not brief.is_absolute() or not brief.is_file():
+        raise RegistryError("--brief must name an existing absolute file")
+    workdir = Path(args.workdir).resolve()
+    if not workdir.is_dir():
+        raise RegistryError("--workdir must name an existing directory")
+
+    output_dir = Path(args.out).resolve() if args.out else workdir / ".autopilot" / "artifacts"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    task_id = brief.stem
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", task_id):
+        raise RegistryError("brief filename does not yield a safe task id")
+    output_path = output_dir / f"{task_id}.out"
+    meta_path = output_dir / f"{task_id}.meta.json"
+    output_path.unlink(missing_ok=True)
+    meta_path.unlink(missing_ok=True)
+    prompt = brief.read_text(encoding="utf-8")
+
+    record = _load_worker(args.worker_id, workdir)
+    variables = {
+        "task_id": task_id,
+        "brief_path": str(brief),
+        "prompt": prompt,
+        "workdir": str(workdir),
+        "output_dir": str(output_dir),
+        "output_file": str(output_path),
+    }
+    cli = record["cli"]
+    command = _substitute(cli["command"], variables)
+    argv = [command, *(_substitute(item, variables) for item in cli["args"])]
+    executable = shutil.which(command)
+    if executable is None:
+        raise RegistryError(f"command not found on PATH: {command}")
+    argv[0] = executable
+    resolved_command = shlex.join(argv)
+
+    cwd = Path(_substitute(cli.get("cwd", "${workdir}"), variables)).expanduser()
+    if not cwd.is_absolute():
+        cwd = workdir / cwd
+    if not cwd.is_dir():
+        raise RegistryError(f"worker cwd does not exist: {cwd}")
+    env = os.environ.copy()
+    env.update(
+        {key: _substitute(value, variables) for key, value in cli.get("env", {}).items()}
+    )
+
+    print(f"Resolved command: {resolved_command}", file=sys.stderr)
+    if not record.get("trusted", False) and not args.yes:
+        try:
+            approved = input("Run this untrusted worker? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            approved = ""
+        if approved not in {"y", "yes"}:
+            print("Aborted: worker command was not approved.", file=sys.stderr)
+            _write_result(
+                output_path,
+                meta_path,
+                "",
+                record["id"],
+                resolved_command,
+                None,
+                0.0,
+                False,
+                manifest_complete=False,
+            )
+            return EXIT_ABORTED
+
+    baseline = _git_baseline(workdir)
+
+    timeout = args.timeout if args.timeout is not None else cli["timeoutSec"]
+    stdin_data = prompt if cli["promptDelivery"] == "stdin" else None
+    output_config = record.get("output", {})
+    worktree_before = None
+    if output_config.get("channel", "stdout") == "worktree":
+        pattern = _substitute(output_config.get("resultPointer") or "**/*", variables)
+        worktree_before = _snapshot(pattern, workdir)
+    started = time.monotonic()
+    process = subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = process.communicate(input=stdin_data, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGKILL)
+        stdout, stderr = process.communicate()
+    duration = time.monotonic() - started
+
+    try:
+        content, expected_output = _render_output(
+            record, stdout, stderr, variables, workdir, worktree_before
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+        content = stdout
+        if stderr:
+            content += ("\n" if content else "") + "[stderr]\n" + stderr
+        content += ("\n" if content else "") + f"[runner]\n{exc}\n"
+        expected_output = False
+    changed_files, new_untracked, manifest_ok = _git_changed_after(workdir, baseline)
+    _write_result(
+        output_path,
+        meta_path,
+        content,
+        record["id"],
+        resolved_command,
+        process.returncode,
+        duration,
+        timed_out,
+        baseline_ref=baseline["ref"] if baseline else None,
+        changed_files=changed_files,
+        new_untracked=new_untracked,
+        manifest_complete=manifest_ok,
+    )
+
+    if timed_out:
+        print(f"Worker timed out after {timeout}s.", file=sys.stderr)
+        return EXIT_TIMEOUT
+    if process.returncode not in cli["successExitCodes"] or not expected_output:
+        print(
+            f"Worker failed: exit={process.returncode}, expectedOutput={expected_output}.",
+            file=sys.stderr,
+        )
+        return EXIT_WORKER_FAILED
+    return 0
+
+
+def _reset(args: argparse.Namespace) -> int:
+    workdir = Path(args.workdir).resolve()
+    if not workdir.is_dir():
+        raise RegistryError("--workdir must name an existing directory")
+    ref = args.to
+    check = subprocess.run(
+        ["git", "rev-parse", "--verify", "--end-of-options", ref + "^{commit}"],
+        cwd=workdir, capture_output=True, text=True, timeout=10,
+    )
+    if check.returncode != 0:
+        raise RegistryError(f"invalid git ref: {ref}")
+    resolved = check.stdout.strip()
+    result = subprocess.run(
+        ["git", "reset", "--hard", resolved],
+        cwd=workdir, capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RegistryError(f"git reset failed: {result.stderr.strip()}")
+    suffix = ""
+    if args.clean:
+        clean_result = subprocess.run(
+            ["git", "clean", "-fd"],
+            cwd=workdir, capture_output=True, text=True, timeout=30,
+        )
+        if clean_result.returncode == 0:
+            suffix = " and cleaned untracked files"
+        else:
+            print(
+                f"Warning: git clean failed: {clean_result.stderr.strip()}",
+                file=sys.stderr,
+            )
+            suffix = " (clean failed)"
+    print(f"Reset to {ref} ({resolved[:8]}){suffix}.", file=sys.stderr)
+    return 0
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="autopilot-worker")
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+    run = subparsers.add_parser("run")
+    run.add_argument("worker_id")
+    run.add_argument("--brief", required=True)
+    run.add_argument("--workdir", required=True)
+    run.add_argument("--out")
+    run.add_argument("--timeout", type=int)
+    run.add_argument("--yes", action="store_true")
+    reset_cmd = subparsers.add_parser("reset")
+    reset_cmd.add_argument("--to", required=True)
+    reset_cmd.add_argument("--workdir", required=True)
+    reset_cmd.add_argument("--clean", action="store_true")
+    return parser
+
+
+def main() -> int:
+    try:
+        args = _parser().parse_args()
+        if args.subcommand == "reset":
+            return _reset(args)
+        if args.timeout is not None and not 1 <= args.timeout <= 3600:
+            raise RegistryError("--timeout must be between 1 and 3600")
+        return _run(args)
+    except RegistryError as exc:
+        print(f"Registry/record error: {exc}", file=sys.stderr)
+        return EXIT_REGISTRY_ERROR
+    except Exception as exc:
+        print(f"Registry/record error: unexpected runner error: {exc}", file=sys.stderr)
+        return EXIT_REGISTRY_ERROR
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,15 @@
+{
+  "name": "autopilot-marketplace",
+  "description": "Autopilot multi-agent orchestration plugin for Claude Code.",
+  "owner": {
+    "name": "Autopilot Contributors"
+  },
+  "plugins": [
+    {
+      "name": "autopilot",
+      "source": "./",
+      "version": "0.1.0",
+      "description": "Multi-agent orchestration with native subagents and registry-driven external workers."
+    }
+  ]
+}

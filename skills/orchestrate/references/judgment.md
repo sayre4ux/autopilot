@@ -1,0 +1,60 @@
+# Judgment rubrics
+
+Use these mechanically. If none resolves the choice, it is a genuine taste call.
+
+## R1 — Escalate the model or role
+
+Escalate when the same subtask failed twice for different reasons, two rule sources must be
+traded off, the task changes a protected/core layer, or user intent cannot be grounded in a
+specific instruction or ticket. Repeated identical failure is usually environmental:
+change the environment or approach instead.
+
+Positive example: after two distinct unusable implementations, ask the architect to rethink
+the approach, then push the resulting execution back to engineering.
+
+Negative example: escalating a minor formatting defect to architecture.
+
+## R2 — Done
+
+All must hold:
+
+1. Every criterion has command output or a concrete artifact.
+2. A mechanism has proof from one successful real run.
+3. The ledger row is backfilled.
+4. Every promise to the user is reported or explicitly rescheduled.
+
+A dry-run alone does not prove a scheduled job, hook, or service works.
+
+## R3 — Ask the user
+
+Ask for irreversible/destructive action without standing authorization, a choice based on
+values rather than technical merit, a scope/direction change to committed work, or a
+contradiction between the instruction and observed facts. Decide ordinary technical
+placement and implementation choices yourself.
+
+## R4 — Change the approach
+
+Stop retrying when the error category remains after two attempts, fixes cause divergence,
+a third special case is needed, or the environment presents the same wall for a third
+time. A third attempt must change worker, approach, model tier, or ask the user.
+
+## R5 — Minimum gates
+
+| Deliverable | Gates |
+|---|---|
+| Code module | Lint + compile + one real run |
+| Script | Syntax check + dry-run + real run |
+| Document/report | Claims verified + structure checked + proofread |
+| Rules/policy | Contradiction search + red-team + read-back |
+| Unattended automation | Relevant gates + side-effect check + real run |
+| Any dispatched output | Artifact spot-check + fresh-context sign-off |
+| Numeric/factual claim | Source, or explicitly `unverified` |
+
+## R6 — Taste
+
+For tone, style, inferred preference, or equally correct alternatives:
+
+1. Search prior user decisions.
+2. Produce two or three candidates and have fresh context score them against
+   pre-registered criteria.
+3. If still unresolved, present the actual taste choice to the user rather than guessing.

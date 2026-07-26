@@ -1,0 +1,28 @@
+{
+  "description": "Optional fail-open Autopilot enforcement and reconciliation hooks.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard-bash.py", "--mode", "${user_config.enforcement}"]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/scripts/ledger-nudge.py", "--mode", "${user_config.enforcement}"]
+          }
+        ]
+      }
+    ]
+  }
+}

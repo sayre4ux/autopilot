@@ -1,0 +1,37 @@
+{
+  "id": "opencode-cli",
+  "type": "cli",
+  "displayName": "opencode CLI (GLM-class)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test",
+    "docs"
+  ],
+  "modelFamily": "zhipu-glm",
+  "preferWhen": "Bulk code execution when a cheaper external model suffices and the brief is fully specified.",
+  "avoidWhen": "Security-sensitive work; design decisions; visual deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "opencode",
+    "args": [
+      "run",
+      "--cwd",
+      "${workdir}",
+      "--prompt-file",
+      "${brief_path}"
+    ],
+    "promptDelivery": "file",
+    "cwd": "${workdir}",
+    "env": {},
+    "timeoutSec": 900,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "worktree",
+    "format": "text",
+    "resultPointer": "**/*"
+  }
+}

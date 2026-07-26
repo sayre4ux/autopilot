@@ -1,0 +1,44 @@
+{
+  "id": "gpt-5.6-luna-high-cli",
+  "type": "cli",
+  "displayName": "GPT-5.6 Luna via Codex CLI (openai — normal coding, high)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test",
+    "docs",
+    "data"
+  ],
+  "modelFamily": "openai",
+  "preferWhen": "Everyday coding at high reasoning effort: well-scoped features and fixes, routine implementation, boilerplate and tests, and straightforward refactors and transformations.",
+  "avoidWhen": "Design-bearing or correctness-critical work that warrants xhigh Luna; frontier-hard reasoning better suited to Sol; security-sensitive work; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "codex",
+    "args": [
+      "exec",
+      "--cd",
+      "${workdir}",
+      "--skip-git-repo-check",
+      "-c",
+      "model_reasoning_effort=high",
+      "-m",
+      "gpt-5.6-luna",
+      "-"
+    ],
+    "promptDelivery": "stdin",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 900,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}

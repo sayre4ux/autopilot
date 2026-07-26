@@ -1,0 +1,22 @@
+{
+  "id": "example-mcp-worker",
+  "type": "mcp",
+  "displayName": "Example MCP coding worker",
+  "capabilities": [
+    "code",
+    "research"
+  ],
+  "modelFamily": "external",
+  "preferWhen": "An MCP server exposes a code-generation tool you want to route mechanical work to.",
+  "avoidWhen": "Security-sensitive work.",
+  "trusted": true,
+  "mcp": {
+    "tool": "mcp__plugin_autopilot_examplecoder__generate",
+    "argsTemplate": {
+      "task_file": "${brief_path}",
+      "cwd": "${workdir}"
+    },
+    "resultField": "content",
+    "timeoutSec": 600
+  }
+}

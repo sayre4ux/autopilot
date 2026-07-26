@@ -1,0 +1,44 @@
+{
+  "id": "gpt-5.6-sol-cli",
+  "type": "cli",
+  "displayName": "GPT-5.6 Sol via Codex CLI (openai \u2014 deep thinker, high)",
+  "capabilities": [
+    "code",
+    "review",
+    "refactor",
+    "test",
+    "research"
+  ],
+  "modelFamily": "openai",
+  "preferWhen": "Deep thinking on the hardest problems at high reasoning effort: root-cause diagnosis, thorny design and algorithm reasoning, and deep code review.",
+  "avoidWhen": "Routine and quality implementation (use Luna); security-sensitive work; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "codex",
+    "args": [
+      "exec",
+      "--cd",
+      "${workdir}",
+      "--skip-git-repo-check",
+      "-c",
+      "model_reasoning_effort=high",
+      "-m",
+      "gpt-5.6-sol",
+      "-"
+    ],
+    "promptDelivery": "stdin",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 1800,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}
