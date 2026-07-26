@@ -294,4 +294,4 @@ real-run evidence for mechanism changes.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=sayre4ux/autopilot&type=Date)](https://www.star-history.com/#sayre4ux/autopilot&Date)
+[![Star History Chart](https://api.star-history.com/chart?repos=sayre4ux/autopilot&type=date&legend=top-left&sealed_token=BYluyO2UUO04YhMzUZv3iLkJQo1FQovoNP-plRp1FX9YBxOpckaTNaBXInHgGNO4xh2ZpqK3ifcHOObQKIiP3qZPEeROSE9MrH5PK0xHoNYbpDwICxWnZ7z0XvyLWUf05nLai5Uys8szbNTZ_LY-Oj_ZSBdz29U7azOLiXnfhFUndRcozRRSA0WEE7mB)](https://www.star-history.com/?repos=sayre4ux%2Fautopilot&type=date&legend=top-left)
