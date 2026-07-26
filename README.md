@@ -2,6 +2,24 @@
 
 > A full command loop for Claude Code: plan, dispatch, verify, reconcile.
 
+## TL;DR
+
+Claude Code plugin for jobs too big for one context. It plans, dispatches
+fresh-context agents, and distrusts everything that comes back.
+
+- **Task ledger** — work survives restarts and context resets
+- **Six native roles + external workers** — Codex, Grok, GPT through one runner
+- **Adversarial review** — 2+ independent reviewers assume the code is wrong;
+  authors are staked to pass in one round
+- **Evidence gates** — same intake for every result, whoever produced it
+- **Fails soft** — no external worker or reviewer is ever load-bearing
+
+```text
+/plugin marketplace add sayre4ux/autopilot
+/plugin install autopilot@autopilot-marketplace
+/autopilot:setup
+```
+
 Autopilot is an MIT-licensed Claude Code plugin for work that is too large for one context.
 It packages a persistent task ledger, self-contained dispatch briefs, six native roles,
 adversarial severity-gated review, and an optional registry of external coding workers.
