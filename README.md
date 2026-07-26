@@ -110,7 +110,7 @@ Requires a current Claude Code release with plugin user configuration, agent
 From Claude Code, add this repository as a marketplace and install the plugin:
 
 ```text
-/plugin marketplace add <github-owner>/autopilot
+/plugin marketplace add sayre4ux/autopilot
 /plugin install autopilot@autopilot-marketplace
 ```
 
