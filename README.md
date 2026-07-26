@@ -4,7 +4,7 @@
 
 Autopilot is an MIT-licensed Claude Code plugin for work that is too large for one context.
 It packages a persistent task ledger, self-contained dispatch briefs, six native roles,
-severity-gated review, and an optional registry of external coding workers.
+adversarial severity-gated review, and an optional registry of external coding workers.
 
 Quality does not depend on which worker produced the change. Every result returns through
 the same intake gates, and a fresh-context native verifier gates the cases that need it —
@@ -20,7 +20,7 @@ explicit mechanics:
 - Delegate only when isolation, parallelism, or scale offsets dispatch overhead.
 - Give every worker a complete brief with acceptance criteria and redlines.
 - Track non-trivial work before acting so restarts do not erase commitments.
-- Separate authors from reviewers and verifiers.
+- Pit authors against independent adversarial reviewers, with real stakes on both sides.
 - Require real evidence, including a successful run for mechanisms.
 - Cap retries and change approach instead of repeating a failed invocation.
 
@@ -58,6 +58,42 @@ Runtime state belongs to the user and project, not the plugin:
 | `<project>/.autopilot/` | Project overlay, worker overrides, ledger, briefs, artifacts, lessons |
 
 Project records and overlay values override matching global values.
+
+## Adversarial review
+
+Review is optional (`off`, `final`, `per-component`) and, when it runs, adversarial on
+both sides. Producers are briefed to pass in one round: every confirmed blocking finding
+is recorded against their work, and disclosure is always cheaper than concealment — a
+limitation reported with evidence costs nothing, a defect the panel finds that the report
+glossed over costs the most.
+
+The final gate runs a panel of at least two independent reviewers (`reviewPanelSize`,
+default 2), launched in parallel with fresh contexts and no visibility into each other,
+preferring distinct model families. Each reviewer presumes the deliverable defective and
+must earn a `PASS` with evidence of absence. Findings merge by union — one reviewer's
+silence never weakens the other's finding — and are cross-scored: confirmed defects a
+reviewer missed, and findings that dissolve under the orchestrator's check, are both
+recorded and feed future reviewer selection. Blocking findings cap at three rounds before
+architect arbitration. A single usable reviewer degrades to a solo review, logged, never a
+broken loop.
+
+## Field results
+
+Numbers from one multi-week production build (a Rust sandboxing CLI) run end-to-end under
+Autopilot — observational results from real work, not a controlled benchmark:
+
+- Independent cross-family review confirmed **25+ critical/major defects in code that had
+  already passed compile and its test suite** — among them an IPv6 containment bypass, a
+  destructive-uninstall safety hole, and a teardown race that killed live sessions.
+- Two-reviewer panels earned their cost directly: on identical briefs, the reviewers'
+  critical findings were **disjoint** — each found criticals the other missed. A solo
+  reviewer would have shipped one either way.
+- The false-positive filter worked in both directions: 3 review findings were refuted by
+  evidence and never reached the implementer.
+- Across 54 external-worker dispatches (three model families), **no failed dispatch lost
+  work** — every failure recovered by retry, continuation brief, or family switch.
+- The project's own test suite grew from 5 to 224 passing tests over the ledger's ~70
+  tasks.
 
 ## Install
 
@@ -126,6 +162,23 @@ External work receives the identical brief and gates as native work. One failed 
 run may retry with its failure trail. The second failure escalates to the native engineer,
 or security engineer for security work.
 
+### Codex compatibility
+
+Codex works as an external `cli` worker ([`codex-cli.json`](workers/presets/codex-cli.json)
+and the `gpt-5.6-*` presets): the brief is delivered over stdin to `codex exec`, the runner
+enforces the timeout and emits the completion callback on every exit path, and its
+review-capable records make it the preferred independent family for the adversarial panel.
+Codex records stay `trusted: false`, so the resolved command requires approval, and they
+are marked avoid-when for security-sensitive and visual work.
+
+Known incompatibility: in superconductor/super.engineering-managed sessions, `codex` on
+PATH resolves to a wrapper that spawns a session watcher and never exits, so `codex exec`
+hangs until killed. Every shipped Codex-based preset therefore sets
+`SUPERCONDUCTOR_MANAGED_AGENT=0` to force the wrapper's clean passthrough branch — keep
+that override when editing them. Verified against wrapper v3 (2026-07-26): the watcher
+still engages whenever a managed session exports the variable as `1`. Invoking the real
+binary by absolute path also works.
+
 ## Enforcement hooks
 
 Autopilot includes optional fail-open hooks. `advisory` is the default:
@@ -148,7 +201,7 @@ Autopilot has no required external worker or reviewer:
 | Worker registry empty | Dispatch the matching native role |
 | Runner or worker command unavailable | Log the failure and use the native role |
 | External worker fails twice | Escalate with its full evidence trail |
-| Independent review worker unavailable | Use native reviewer or proceed when review is off |
+| Independent review worker unavailable | Fill the panel with the native reviewer; solo review when only one seat fills |
 | Only one model tier available | Keep role separation, strengthen briefs, reduce parallelism |
 
 Aliases (`opus`, `sonnet`, `haiku`) keep role bindings independent of dated model releases.
