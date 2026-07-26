@@ -54,6 +54,43 @@ restate → check → review mode → route → ticket → decompose
         → dispatch → intake → zoom out → close out
 ```
 
+### Architecture
+
+```mermaid
+flowchart TB
+    U[User request] --> O["/autopilot:orchestrate<br/>(sole dispatcher)"]
+
+    subgraph plugin["Plugin package"]
+        SK["skills/<br/>setup · orchestrate + references"]
+        AG["agents/<br/>architect · engineer · engineer-doc<br/>security-engineer · verifier · reviewer"]
+        HK["hooks/<br/>guard-bash · ledger-nudge"]
+        WR["workers/<br/>autopilot-worker runner + presets"]
+    end
+
+    O --- SK
+    O --> AG
+    O --> WR
+    HK -.guards every session.-> O
+
+    WR --> EXT["External workers<br/>Codex · Grok · GPT · opencode · MCP"]
+    EXT -. detached run, pings back .-> O
+
+    AG --> IN[Intake gates<br/>evidence required]
+    EXT --> IN
+    IN --> VF[Fresh-context verifier]
+    VF --> RV["Adversarial review<br/>(off · final · per-component)"]
+    RV --> O
+
+    subgraph state["Runtime state (gitignored)"]
+        G["~/.autopilot/<br/>config.jsonc · workers/"]
+        P["&lt;project&gt;/.autopilot/<br/>ledger · briefs · artifacts · lessons"]
+    end
+
+    O <--> P
+    O <--> G
+    O --> DL["DEVLOG.md<br/>(committed handover, if present)"]
+```
+
 Native roles cover architecture, code, visual documents, security, verification, and
 review. The orchestrator is the only dispatcher; agents never spawn agents. Work above the
 software threshold—more than three files, more than 200 changed lines, or multi-component
@@ -254,3 +291,7 @@ real-run evidence for mechanism changes.
 ## License
 
 [MIT](LICENSE)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=sayre4ux/autopilot&type=Date)](https://www.star-history.com/#sayre4ux/autopilot&Date)
