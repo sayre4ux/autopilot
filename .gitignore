@@ -2,3 +2,7 @@
 .autopilot/
 __pycache__/
 *.py[cod]
+.sc/
+.venv/
+.pytest_cache/
+.ruff_cache/
