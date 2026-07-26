@@ -16,7 +16,7 @@
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
 
-[Install](#install) · [How it works](#how-it-works) · [Adversarial review](#adversarial-review) · [Field results](#field-results) · [Workers](#workers) · [Design docs](docs/design.md)
+[Install](#install) · [How it works](#how-it-works) · [super.engineering](#better-with-superengineering) · [Adversarial review](#adversarial-review) · [Field results](#field-results) · [Workers](#workers) · [Design docs](docs/design.md)
 
 </div>
 
@@ -33,6 +33,8 @@ fresh-context agents, and distrusts everything that comes back.
   authors are staked to pass in one round
 - **Evidence gates** — same intake for every result, whoever produced it
 - **Fails soft** — no external worker or reviewer is ever load-bearing
+- **Best paired with [super.engineering](#better-with-superengineering)** — roles run as
+  real sc agents in their own panes, on distinct model families
 
 ```text
 /plugin marketplace add sayre4ux/autopilot
@@ -47,6 +49,35 @@ adversarial severity-gated review, and an optional registry of external coding w
 Quality does not depend on which worker produced the change. Every result returns through
 the same intake gates, and a fresh-context native verifier gates the cases that need it —
 always for external-worker code, plus security, unattended, and weak-evidence work.
+
+## Better with super.engineering
+
+Autopilot runs standalone on stock Claude Code, but it is built to sit on top of
+[super.engineering](https://super.engineering) and its `sc` CLI, and that is the
+recommended way to run it. Where sc is available it is the dispatch vehicle; Agent-tool
+dispatch is the degradation, not the default.
+
+The orchestrator probes once per job — `sc` on PATH and `sc agents list --output json`
+succeeding — and if it answers, four things change:
+
+- **Roles become real agents.** Each dispatch launches as a labeled sc agent
+  (`t-###-<role>`) in its own pane through `sc layout run`, so you watch six roles work
+  instead of waiting on an opaque subagent. Follow-ups, retries, and review rounds go back
+  to the same live agent with `sc agent send`.
+- **Cross-family review stops being aspirational.** The adversarial panel resolves real
+  providers from `sc layout capabilities` and deliberately seats a reviewer from a
+  different family than the producer. That disjoint-findings result under
+  [Field results](#field-results) is what this buys.
+- **Fan-out survives a headless session.** `sc agents get` resolves a callback address, so
+  finished workers wake the dispatching session by queued message rather than by being
+  waited on. Without a resolvable address every dispatch simply stays synchronous.
+- **True isolation when paths overlap.** Parallel code briefs touching the same files take
+  `sc worktree create` instead of sharing one working tree — only ever on your explicit
+  request.
+
+None of it is required. Any sc failure, at probe time or mid-job, falls through to
+Agent-tool dispatch with the same brief and logs the degradation. Registry `cli` and `mcp`
+workers are unaffected either way.
 
 ## Why
 
@@ -253,9 +284,10 @@ review-capable records make it the preferred independent family for the adversar
 Codex records stay `trusted: false`, so the resolved command requires approval, and they
 are marked avoid-when for security-sensitive and visual work.
 
-Known incompatibility: in superconductor/super.engineering-managed sessions, `codex` on
-PATH resolves to a wrapper that spawns a session watcher and never exits, so `codex exec`
-hangs until killed. Every shipped Codex-based preset therefore sets
+One wrapper caveat, and it is narrow — it affects the `codex` binary only, not the
+[sc integration](#better-with-superengineering): in super.engineering-managed sessions,
+`codex` on PATH resolves to a wrapper that spawns a session watcher and never exits, so
+`codex exec` hangs until killed. Every shipped Codex-based preset therefore sets
 `SUPERCONDUCTOR_MANAGED_AGENT=0` to force the wrapper's clean passthrough branch — keep
 that override when editing them. Verified against wrapper v3 (2026-07-26): the watcher
 still engages whenever a managed session exports the variable as `1`. Invoking the real
