@@ -59,6 +59,13 @@ Runtime state belongs to the user and project, not the plugin:
 
 Project records and overlay values override matching global values.
 
+Separately from that gitignored state, a project may keep a committed root `DEVLOG.md` as
+its handover surface for any agent harness — a one-screen State header rewritten at each
+close-out plus append-only numbered entries with verification evidence. Autopilot
+maintains an existing devlog (single writer: the orchestrator) but never creates one
+uninvited; reference it from `CLAUDE.md` and `AGENTS.md` so Claude, Codex, and other tools
+all find it on a cold pickup.
+
 ## Adversarial review
 
 Review is optional (`off`, `final`, `per-component`) and, when it runs, adversarial on

@@ -156,6 +156,14 @@ lessons.md
 Artifacts are never automatically deleted. Completed ledger rows may be archived after the
 documented threshold; their regenerable briefs may then be removed.
 
+Distinct from this gitignored harness state, a project may keep a committed root
+`DEVLOG.md` as its cross-agent handover surface: a rewritten one-screen State header plus
+append-only numbered entries, maintained by the orchestrator at close-out and readable by
+any harness (Claude, Codex, or another tool doing a cold pickup). It is presence-activated
+— Autopilot maintains an existing devlog but never creates one uninvited. Single writer:
+workers read it as material and never append; ledger Notes point at entries
+(`see DEVLOG §N`) instead of accumulating narrative.
+
 ## Contributor invariants
 
 1. Keep plugin content free of user and machine specifics except the single labeled

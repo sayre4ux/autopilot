@@ -143,6 +143,11 @@ lesson covers it; otherwise increase its hit count. Reconcile every active/open/
 owned by this session — close out only when none remain awaiting — and run the housekeeping
 thresholds in `maintenance.md`.
 
+If the project has a root `DEVLOG.md`, maintain it per the devlog section of
+`maintenance.md`: append one numbered entry for this job with verification evidence, and
+rewrite the State header to current facts. Ledger Notes then carry pointers
+(`see DEVLOG §N`), not narrative. Never create a devlog uninvited.
+
 ## Quick reference
 
 ```text
@@ -156,5 +161,5 @@ thresholds in `maintenance.md`.
 6a Wake   reconcile ledger / intake the announced task only
 7 Intake   spot-check / red-team / sign-off / verifier per R7
 8 Zoom out aggregate consistency
-9 Close    report / learn / reconcile
+9 Close    report / learn / reconcile / devlog entry + State rewrite
 ```

@@ -26,7 +26,9 @@ Every native or external worker receives this self-contained shape:
 
 Write briefs longer than about 20 lines to `.autopilot/dispatch/T-###.md`. Prefer files to
 large inline content. Agents have no shared memory; a missing material is a gap, not
-permission to synthesize a substitute.
+permission to synthesize a substitute. When the project keeps a root `DEVLOG.md` and its
+State section bears on the task, cite it in `<materials>`; workers read the devlog but
+never write it — the orchestrator appends the job's entry at close-out.
 
 ## Review block
 

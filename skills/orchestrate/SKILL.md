@@ -119,7 +119,9 @@ the probe never ran — run it before dispatching rather than assuming `agent-to
 
 Statuses: `open | active | awaiting | blocked | done | dropped`. `awaiting` means the work is
 running elsewhere and a callback will wake this session; record the callback target, dispatch
-mode, and expected duration in Notes.
+mode, and expected duration in Notes. Notes hold state and pointers, not narrative: when the
+project keeps a root `DEVLOG.md`, history goes there as `see DEVLOG §N` (devlog section of
+`references/maintenance.md`).
 
 ## Dispatch rules
 
