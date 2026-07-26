@@ -14,6 +14,14 @@ State four things before action:
 At the same time, read optional global and project overlays in the load order documented
 in `workers.md`. Absence is normal.
 
+Then run the dispatch-vehicle probe once, before any other step: `sc agents list --output
+json`. Success means sc-managed orchestration per the sc section of `dispatch.md` is the
+vehicle for every role dispatch this job; failure or a missing CLI means Agent-tool
+dispatch. Resolve the callback address in the same pass (`SKILL.md` startup). Record the
+outcome in the ledger header as `Vehicle: sc | agent-tool` with the reason on failure. An
+absent `Vehicle:` line means the probe was skipped — run it before dispatching, never assume
+Agent-tool.
+
 ## 1 — Check before reinventing
 
 Search `.autopilot/ledger.md` for existing work, `.autopilot/lessons.md` for prior failures,
@@ -48,8 +56,12 @@ Pass these gates in order:
 For work above trivial, create or update a ledger row before starting:
 
 ```markdown
-| Task ID | Type | Role | Status | Depends On | Model Used | Notes |
+| Task ID | Type | Role | Status | Depends On | Vehicle | Model Used | Notes |
 ```
+
+`Vehicle` is `sc` or `agent-tool` (or the registry worker's runner for CLI/MCP dispatch) —
+what this dispatch actually used, so a degradation away from the header's job-level vehicle
+is visible per row.
 
 Statuses are `open | active | awaiting | blocked | done | dropped`. `awaiting` means the
 work is running elsewhere and a callback will wake this session; its Notes hold the callback

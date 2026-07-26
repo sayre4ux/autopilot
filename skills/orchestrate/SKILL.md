@@ -65,11 +65,14 @@ absence. Read worker records from both registry locations with project ids overr
 global ids. Apply role alias/effort overlays per `references/roles.md`: model as the Agent
 tool's per-call override, effort via the definition frontmatter or sc `--reasoning`.
 
-Detect sc-managed orchestration once per job: if the `sc` CLI is on PATH and
-`sc agents list --output json` succeeds, super.engineering agent orchestration is
-available — role dispatches route through the sc-managed path in
-`references/dispatch.md`. If detection fails, or any later sc call fails, fall through to
-Agent-tool/registry dispatch and log the degradation; never retry sc ritualistically.
+Run the dispatch-vehicle probe once per job, before the first dispatch: if the `sc` CLI is on
+PATH and `sc agents list --output json` succeeds, super.engineering agent orchestration is
+available and every role dispatch routes through the sc-managed path in
+`references/dispatch.md`. sc is the vehicle whenever it is available — Agent-tool dispatch is
+the degradation, not the default. If the probe fails, or any later sc call fails, fall
+through to Agent-tool/registry dispatch and log the degradation with its reason; never retry
+sc ritualistically. Record the result in the ledger header as `Vehicle:`; skipping the probe
+and dispatching via the Agent tool by default is a harness failure, not a shortcut.
 
 In the same detection pass, resolve the callback address that lets finished workers wake this
 session: `sc agents get --to "id:chat:$SUPERCONDUCTOR_TERMINAL_ID" --output json`, usable only
@@ -103,11 +106,16 @@ Create `<project>/.autopilot/ledger.md` on first non-trivial use:
 ```markdown
 # Task Ledger
 
+Vehicle: sc | agent-tool (<reason if agent-tool>)
 Callback: chat:<terminal-id> | none
 
-| Task ID | Type | Role | Status | Depends On | Model Used | Notes |
-|---|---|---|---|---|---|---|
+| Task ID | Type | Role | Status | Depends On | Vehicle | Model Used | Notes |
+|---|---|---|---|---|---|---|---|
 ```
+
+`Vehicle` in the header is the probe result for the job; the per-row value is what that
+dispatch actually used, so a mid-job degradation stays visible. A missing header line means
+the probe never ran — run it before dispatching rather than assuming `agent-tool`.
 
 Statuses: `open | active | awaiting | blocked | done | dropped`. `awaiting` means the work is
 running elsewhere and a callback will wake this session; record the callback target, dispatch

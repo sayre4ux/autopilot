@@ -17,7 +17,8 @@ agents to spawn agents. Doctrine must remain executable by the weakest available
 | verifier | `subagent_type: "autopilot:verifier"` | opus | xhigh | Fresh-context `CONFIRMED`/`REFUTED` code gate; never fixes |
 | reviewer | `subagent_type: "autopilot:reviewer"` | opus | high | Fresh-context severity-tagged findings; never fixes |
 
-Dispatch native roles with the Agent tool using the exact namespaced `subagent_type` above.
+Dispatch native roles with the Agent tool using the exact namespaced `subagent_type` above,
+unless the step-0 probe found sc — then the sc path below is the vehicle, not this one.
 Agent frontmatter supplies each role's model and effort. The Agent tool takes a per-call
 `model` parameter — pass the overlay-resolved model there — but has no per-call effort
 argument: a subagent runs at its frontmatter `effort`, which overrides the session effort
@@ -29,7 +30,8 @@ When sc-managed orchestration is detected, dispatch these roles as labeled sc ag
 `dispatch.md` instead of Agent-tool subagents. The brief's `<system>` block replaces agent
 frontmatter entirely; the resolved alias/effort maps to `--model`/`--reasoning` using ids
 listed by `sc layout capabilities --output json`. Role boundaries, effort policy, and the
-no-agent-spawning rule apply unchanged; the Agent tool remains the guaranteed floor.
+no-agent-spawning rule apply unchanged. The Agent tool is the degraded floor for when sc is
+absent or fails — not the default to fall back on because the probe was skipped.
 
 Effort does not vary by model generation. Every delegated role runs at `high` or above: a
 subagent gets one shot with no interactive correction, so the floor is `high` even when the
