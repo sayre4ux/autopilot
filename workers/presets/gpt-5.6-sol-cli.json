@@ -1,7 +1,7 @@
 {
   "id": "gpt-5.6-sol-cli",
   "type": "cli",
-  "displayName": "GPT-5.6 Sol via Codex CLI (openai \u2014 deep thinker, high)",
+  "displayName": "GPT-5.6 Sol via Codex CLI (openai \u2014 deep thinker, max)",
   "capabilities": [
     "code",
     "review",
@@ -10,8 +10,8 @@
     "research"
   ],
   "modelFamily": "openai",
-  "preferWhen": "Deep thinking on the hardest problems at high reasoning effort: root-cause diagnosis, thorny design and algorithm reasoning, and deep code review.",
-  "avoidWhen": "Routine and quality implementation (use Luna); security-sensitive work; visual/document deliverables.",
+  "preferWhen": "Frontier-hard reasoning at max effort where depth beats latency: root-cause diagnosis of a problem nothing else has cracked, thorny design and algorithm reasoning, short and fully self-contained hard questions.",
+  "avoidWhen": "Any task on a budget — max effort spends it exploring and can time out without a verdict; use gpt-5.6-sol-high-cli for diff and design review or a large brief. Also: routine implementation (use Luna); security-sensitive work; visual/document deliverables.",
   "trusted": false,
   "cli": {
     "command": "codex",
@@ -21,7 +21,7 @@
       "${workdir}",
       "--skip-git-repo-check",
       "-c",
-      "model_reasoning_effort=high",
+      "model_reasoning_effort=max",
       "-m",
       "gpt-5.6-sol",
       "-"
