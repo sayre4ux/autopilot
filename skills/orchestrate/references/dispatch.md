@@ -34,10 +34,15 @@ permission to synthesize a substitute.
 <review>
   <task_id>T-001</task_id>
   <domain>code | document | analysis | design | research</domain>
+  <panel>reviewer N of M | solo</panel>
   <deliverable>Full artifact or exact paths/diff.</deliverable>
   <spec>Authoritative design or specification.</spec>
   <criteria>Original acceptance criteria.</criteria>
   <instruction>
+    Assume the deliverable is defective and hunt from every applicable angle; a PASS must
+    be earned with evidence. On a panel, another reviewer examines the same artifact
+    independently: confirmed defects you miss and findings that dissolve under check are
+    both recorded against your review.
     Return structured critical | major | minor | nit findings with file/line evidence.
     No conversation and no edits.
   </instruction>

@@ -23,6 +23,35 @@ agent, preferring a provider different from the producer's when `sc layout capab
 --output json` lists one. Fresh session equals fresh context; never reuse the producer's
 sc agent for its own review.
 
+## Adversarial panel
+
+The final gate — the review in `final` mode, or the integration/last review in
+`per-component` — runs a panel of at least two reviewers (overlay `reviewPanelSize`,
+default 2). Panel members launch in parallel with fresh contexts and identical review
+blocks, with no visibility into each other's findings. Diversify the panel: prefer distinct
+model families across members, mixing a review-capable registry worker with the native
+reviewer when both exist. Every review dispatch, solo or panel, carries the adversarial
+instruction in the `dispatch.md` review block — the reviewer assumes the deliverable is
+defective, and a panel member knows a rival reviews the same artifact and that misses and
+dissolved findings are both recorded.
+
+If only one usable reviewer exists, run solo and log the degradation; review
+unavailability never breaks execution.
+
+### Merge protocol
+
+1. Union the findings, deduplicating by location and defect; on severity disagreement keep
+   the higher unless artifact evidence refutes it.
+2. One reviewer's silence never weakens the other's finding — independence means union,
+   not consensus.
+3. Spot-check every blocking finding against the artifact before acting. A finding the
+   evidence refutes is dropped and recorded against its reviewer; a finding that cannot be
+   checked cheaply stays blocking (fail-closed) and travels to the implementer, who may
+   rebut it with evidence in the revision.
+4. Record per-reviewer misses of confirmed blocking findings, and dropped false findings,
+   in the ledger Notes. This credibility record feeds future reviewer selection and
+   `lessons.md`.
+
 ## Severity
 
 | Severity | Definition | New round |
@@ -34,11 +63,14 @@ sc agent for its own review.
 
 ## Loop
 
-1. Reviewer receives the deliverable, authoritative spec, and original criteria in a
-   self-contained review block.
-2. With no critical/major findings, pass and collect minor/nit notes.
-3. With blocking findings, send the complete findings and artifact back to the implementer.
-4. Review the revision in fresh context.
+1. Each reviewer receives the deliverable, authoritative spec, and original criteria in a
+   self-contained review block — the full panel at the final gate, solo otherwise.
+2. Merge per the panel protocol. With no surviving critical/major findings, pass and
+   collect minor/nit notes.
+3. With blocking findings, send the complete merged findings and artifact back to the
+   implementer.
+4. Review the revision in fresh context: one fresh reviewer with every prior finding
+   attached, checking each fix and scanning the revision for regressions.
 5. If round three still blocks, send design, latest artifact, every finding, and every
    revision to architect using T5.
 

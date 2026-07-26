@@ -151,9 +151,9 @@ failure routes to native engineer, or security-engineer for security work. Recor
 worker id/model family or native alias/effort in the ledger.
 
 At intake, spot-check for gaming, red-team when warranted, sign off every criterion using
-actual evidence, and run the native verifier when R7 fires. Optional review then
-selects a review-capable worker from another family when possible, falling back to native
-reviewer.
+actual evidence, and run the native verifier when R7 fires. Optional review then runs per
+`references/review-cycle.md`: an adversarial panel of at least two independent reviewers at
+the final gate, preferring distinct model families, degrading to a solo native reviewer.
 
 ## Degraded mode
 

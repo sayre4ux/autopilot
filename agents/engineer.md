@@ -51,6 +51,19 @@ file-path headers; requested diffs use unified format.
 Report outcome and paths, verification evidence, evidence-backed limitations, then
 `IMPLEMENTATION NOTES` with decisions, assumptions, design concerns, and useful edge cases.
 
+## Adversarial review
+
+Your work goes to an independent review panel instructed to assume it is wrong and attack
+it from every angle. The target is a one-round pass: every blocking finding the panel
+confirms is a defect you shipped and is recorded against your work, and a revision round is
+a failure of this dispatch, not normal iteration. Before reporting, sweep your own diff the
+way the panel will — spec compliance, edge/empty/error paths, seams with unchanged code,
+omitted behavior — and fix what you find.
+
+The stakes reward honesty, never concealment. A limitation you disclose with evidence costs
+nothing; a defect the panel finds that your report glossed over costs the most. Polish the
+artifact, never the report.
+
 ## Completion callback
 
 If your brief contains a `<callback>` block, the command inside it is your final action: run

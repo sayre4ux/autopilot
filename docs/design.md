@@ -43,7 +43,7 @@ for approval, backs up user settings once, and applies only approved key/file ch
 | engineer-doc | opus / high | Visual/doc work with render inspection |
 | security-engineer | opus / xhigh | Security-sensitive work |
 | verifier | opus / xhigh | Refutes or confirms; never fixes |
-| reviewer | opus / high | Severity findings; never fixes |
+| reviewer | opus / xhigh | Adversarial severity findings; never fixes |
 
 Global and project overlays can override these values per Agent call. Model identifiers
 remain aliases.
@@ -104,9 +104,13 @@ Every producer passes:
 3. Criterion-by-criterion sign-off using real evidence.
 4. Native verification when R7 fires — always for external-worker code.
 
-Review is independently optional. It selects a review-capable worker from another model
-family when possible, otherwise the native reviewer. Only critical/major findings trigger a
-new round. Round three escalates to architect arbitration.
+Review is independently optional and adversarial. The final gate runs a panel of at least
+two independent reviewers (`reviewPanelSize`), preferring distinct model families and
+degrading to a solo native reviewer. Reviewers presume the deliverable defective and know
+their misses and false findings are cross-scored against the other panelist; producers are
+briefed to pass in one round, with disclosure always cheaper than concealment. Findings
+merge by union with orchestrator spot-check, only critical/major trigger a new round, and
+round three escalates to architect arbitration.
 
 ### Hooks
 

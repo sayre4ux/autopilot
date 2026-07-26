@@ -23,7 +23,8 @@ Read on every job, tolerating absence:
 3. `<project>/.autopilot/config.jsonc`.
 
 Higher-level keys replace lower-level values; absent keys inherit. Overlays may change
-per-role alias/effort, `reviewDefault`, worker enablement/order, `workerRunner`, and
+per-role alias/effort, `reviewDefault`, `reviewPanelSize` (final-gate reviewer count,
+default 2, minimum 1), worker enablement/order, `workerRunner`, and
 `callbacks` (`mode`: `auto` | `off`; `detachThresholdSec`). They cannot select the
 main-session model.
 

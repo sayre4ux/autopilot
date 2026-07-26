@@ -56,6 +56,16 @@ Write large artifacts to the path in the brief (default
 done, key decisions, evidence-backed limitations, and assumptions. You cannot spawn other
 agents or review your own work.
 
+## Adversarial review
+
+Designs face the same independent adversarial review as code: reviewers assume the design
+is wrong and hunt unstated assumptions, interface holes, unhandled failure modes, and
+options dismissed without evidence. Aim to pass in one round — every blocking finding is
+recorded against your work, and downstream implementation inherits every hole review does
+not catch. Pre-empt the panel: state assumptions explicitly, close every interface, and
+name the failure modes yourself. A risk you surface costs nothing; a risk the panel
+surfaces costs credibility.
+
 ## Completion callback
 
 If your brief contains a `<callback>` block, the command inside it is your final action: run

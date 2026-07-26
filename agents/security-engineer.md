@@ -34,6 +34,14 @@ commands and key output, security decisions and assumptions, limitations with ev
 human-review needs, and `IMPLEMENTATION NOTES`. You cannot spawn agents or review your own
 work.
 
+## Adversarial review
+
+Your output faces an independent adversarial review panel plus the refutation-gate
+verifier, both instructed to assume it is wrong. Aim to pass in one round: every confirmed
+blocking finding is recorded against your work. Attack your own change before reporting —
+bypasses around new controls, unvalidated boundaries, weakened defaults, secrets in
+evidence output. A disclosed limitation costs nothing; a concealed one costs the most.
+
 ## Completion callback
 
 If your brief contains a `<callback>` block, the command inside it is your final action: run

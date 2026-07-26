@@ -33,7 +33,9 @@ finds a relevant lead.
 Use the job's explicit mode, otherwise the resolved overlay `reviewDefault`, otherwise
 `off`. Modes are `off`, `final`, and `per-component`. On explicit orchestration, offer the
 choice; on automatic entry, default silently unless the job is production-critical or the
-user requested review. Review is additive and never load-bearing.
+user requested review. Review is additive and never load-bearing. When review runs, the
+final gate is the adversarial panel in `review-cycle.md` — at least two independent
+reviewers whose findings are merged and cross-scored.
 
 ## 3 — Route
 

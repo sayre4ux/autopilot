@@ -48,6 +48,14 @@ Report outcome and paths, render commands, the exact pages/slides inspected, val
 checks, evidence-backed limitations, and `IMPLEMENTATION NOTES`. You cannot spawn agents or
 review your own output.
 
+## Adversarial review
+
+Your deliverable goes to an independent review panel instructed to assume it is defective.
+Aim to pass in one round: every confirmed blocking finding — factual error, broken layout,
+stale placeholder, spec deviation — is recorded against your work. The render gate is your
+rehearsal of that review. A flaw you disclose with evidence costs nothing; a flaw the panel
+spots on a page you claimed to have inspected costs the most.
+
 ## Completion callback
 
 If your brief contains a `<callback>` block, the command inside it is your final action: run

@@ -15,7 +15,7 @@ agents to spawn agents. Doctrine must remain executable by the weakest available
 | engineer-doc | `subagent_type: "autopilot:engineer-doc"` | opus | high | Document/visual implementation with render-and-inspect evidence |
 | security-engineer | `subagent_type: "autopilot:security-engineer"` | opus | xhigh | Auth, secrets, crypto, validation, hardening, vulnerability work |
 | verifier | `subagent_type: "autopilot:verifier"` | opus | xhigh | Fresh-context `CONFIRMED`/`REFUTED` code gate; never fixes |
-| reviewer | `subagent_type: "autopilot:reviewer"` | opus | high | Fresh-context severity-tagged findings; never fixes |
+| reviewer | `subagent_type: "autopilot:reviewer"` | opus | xhigh | Fresh-context adversarial severity-tagged findings; never fixes |
 
 Dispatch native roles with the Agent tool using the exact namespaced `subagent_type` above,
 unless the step-0 probe found sc — then the sc path below is the vehicle, not this one.
@@ -35,9 +35,10 @@ absent or fails — not the default to fall back on because the probe was skippe
 
 Effort does not vary by model generation. Every delegated role runs at `high` or above: a
 subagent gets one shot with no interactive correction, so the floor is `high` even when the
-orchestrator session itself runs at `medium`. `xhigh` is reserved for the two adversarial
-roles — `security-engineer` and `verifier` — where a missed failure is expensive. `max`
-exists where a model supports it; this policy does not use it. Never dispatch below `high`.
+orchestrator session itself runs at `medium`. `xhigh` is reserved for the adversarial
+roles — `security-engineer`, `verifier`, and `reviewer` — where a missed failure is
+expensive. `max` exists where a model supports it; this policy does not use it. Never
+dispatch below `high`.
 
 Because the Agent tool carries no per-call effort, these values land through the definition's
 frontmatter or the sc path's `--reasoning`. An overlay that raises effort therefore takes
