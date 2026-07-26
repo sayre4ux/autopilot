@@ -1,6 +1,26 @@
-# Autopilot
+<div align="center">
 
-> A full command loop for Claude Code: plan, dispatch, verify, reconcile.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.png">
+  <img alt="Autopilot — multi-agent orchestration for deep, reliable execution" src="docs/assets/banner-light.png" width="100%">
+</picture>
+
+<br>
+
+**A full command loop for Claude Code: plan, dispatch, verify, reconcile.**
+
+[![CI](https://img.shields.io/github/actions/workflow/status/sayre4ux/autopilot/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/actions/workflows/ci.yml)
+[![Claude Code plugin](https://img.shields.io/badge/claude%20code-plugin-8b5cf6?style=flat-square&labelColor=1c1b22)](https://docs.claude.com/en/docs/claude-code/overview)
+[![Version](https://img.shields.io/badge/version-0.1.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
+[![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
+
+[Install](#install) · [How it works](#how-it-works) · [Adversarial review](#adversarial-review) · [Field results](#field-results) · [Workers](#workers) · [Design docs](docs/design.md)
+
+</div>
+
+---
 
 ## TL;DR
 
