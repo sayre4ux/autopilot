@@ -123,7 +123,7 @@ flowchart TB
     O --> WR
     HK -.guards every session.-> O
 
-    WR --> EXT["External workers<br/>Codex · Grok · GPT · opencode · MCP"]
+    WR --> EXT["External workers<br/>Codex · Grok · GPT · opencode · omp · MCP"]
     EXT -. detached run, pings back .-> O
 
     AG --> IN[Intake gates<br/>evidence required]
@@ -151,7 +151,7 @@ orchestrated.
 Dispatched work pings back. A fan-out of external workers runs detached and each one wakes the
 dispatching session when it finishes, so the orchestrator ends its turn instead of idling —
 which is what makes fan-out usable from a headless `claude -p` session. The runner emits the
-callback for CLI workers (Codex, Grok, GPT, opencode) on every exit path; sc-managed agents
+callback for CLI workers (Codex, Grok, GPT, opencode, omp) on every exit path; sc-managed agents
 carry the send command in their brief; Agent-tool and MCP dispatches are synchronous already.
 Without a resolvable callback address every dispatch simply stays synchronous.
 
@@ -284,14 +284,40 @@ review-capable records make it the preferred independent family for the adversar
 Codex records stay `trusted: false`, so the resolved command requires approval, and they
 are marked avoid-when for security-sensitive and visual work.
 
-One wrapper caveat, and it is narrow — it affects the `codex` binary only, not the
-[sc integration](#better-with-superengineering): in super.engineering-managed sessions,
-`codex` on PATH resolves to a wrapper that spawns a session watcher and never exits, so
-`codex exec` hangs until killed. Every shipped Codex-based preset therefore sets
-`SUPERCONDUCTOR_MANAGED_AGENT=0` to force the wrapper's clean passthrough branch — keep
-that override when editing them. Verified against wrapper v3 (2026-07-26): the watcher
-still engages whenever a managed session exports the variable as `1`. Invoking the real
-binary by absolute path also works.
+One wrapper caveat applies to the provider binaries, not to the
+[sc integration](#better-with-superengineering): in super.engineering-managed sessions the
+binary on PATH resolves to an agent wrapper that changes the invocation. For `codex` the
+wrapper spawns a session watcher and never exits, so `codex exec` hangs until killed. For
+`omp` it prepends `-e <hook>.ts` to the argv, which the top-level flags tolerate but
+subcommands such as `omp plugin` reject outright. Every shipped preset built on a wrapped
+binary therefore sets `SUPERCONDUCTOR_MANAGED_AGENT=0` to force the wrapper's clean
+passthrough branch — keep that override when editing them. Verified against wrapper v3
+(codex 2026-07-26, omp 2026-07-30): both branches engage whenever a managed session exports
+the variable as `1`. The override governs the wrapper's normal path only; the separate
+command-override branch (`SUPERCONDUCTOR_COMMAND_OVERRIDE_DISPATCH=1`) is evaluated first and
+ignores the variable, so invoking the real binary by absolute path remains the stronger
+guarantee.
+
+### omp compatibility
+
+omp (oh-my-pi) works as an external `cli` worker
+([`omp-cli.json`](workers/presets/omp-cli.json)): the brief is delivered as an `@file`
+message to `omp -p`, `--no-session` keeps worker runs out of the session store, and results
+are collected from the worktree. The record pins no model, so the run uses whatever omp
+resolves from its own configuration (`modelRoles.default` in `~/.omp/agent/config.yml`). That
+is the point of the record — and the reason its `modelFamily` is `omp-configured` rather than
+a real family name: the adversarial panel cannot treat it as a guaranteed independent family,
+because the family is whatever the local config says today. When omp is the *producer*,
+resolve that value before seating a reviewer, or the panel will count an opaque family as
+independent when it is not.
+
+Know the approval boundary before enabling it. Like every shipped record it is
+`trusted: false`, so the runner prints the resolved command and waits for approval — but
+`--auto-approve` is required for an unattended run, and it means that once the command is
+approved, omp self-approves **every** subsequent tool call it makes inside `--workdir`: edits,
+writes, shell commands, network access. That single command approval is the last human gate
+in the run, which is why the record is marked avoid-when for security-sensitive work. Drop
+`--auto-approve` if you intend to supervise a run interactively instead.
 
 ## Enforcement hooks
 

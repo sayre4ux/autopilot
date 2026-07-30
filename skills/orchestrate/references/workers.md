@@ -35,6 +35,14 @@ Match task need to `capabilities`. Exclude disabled records and heed `avoidWhen`
 `modelFamily`. If no record matches or invocation is unavailable, select the corresponding
 native role.
 
+A `modelFamily` that names no real family — `omp-configured` and anything else resolved from
+local configuration rather than the record — is not evidence of independence. When such a
+record is the *producer*, its opaque value differs from every real family string, so the panel
+would seat a reviewer it merely assumes is independent. Resolve the actual family first (for
+omp, `modelRoles.default` in `~/.omp/agent/config.yml`), seat the reviewer against that, and
+log the resolved family in `Model Used`. If it cannot be resolved, treat the producer's family
+as unknown and prefer a native reviewer whose family you do know.
+
 Log worker id plus family in `Model Used`, for example `code-worker (external-family)`.
 
 ## CLI contract
@@ -96,6 +104,16 @@ the pid, so a quiet task is probed with `kill -0 <pid>` rather than guessed at.
 worker committed (via `baseline..HEAD` diff), not only uncommitted modifications.
 `manifestComplete: false` means a git command failed or timed out; the manifest is
 incomplete and should not be used for overlap analysis.
+
+For `output.channel: "worktree"`, the result is the list of paths the run touched, compared
+against a pre-run snapshot of the same pointer. Three rules make that list mean something:
+hidden paths count, so work confined to `.github/` or `.gitignore` is visible; a removal is
+reported as `deleted: <path>`, so a delete-only task is not an empty result and therefore not
+a failed run; and paths the repository ignores are dropped, so a worker that produced nothing
+but `__pycache__` or another build artifact fails instead of reporting success. Repository
+internals (`.git`, `.hg`, `.svn`) are never results. A deliberately ignored file that *is* the
+deliverable needs `channel: "file"` with an explicit `resultPointer`, because the ignore
+filter would otherwise discard it.
 
 The reset subcommand wraps `git reset --hard` and `git clean -fd` inside deterministic
 Python to avoid relying on LLM judgment for destructive operations. This intentionally

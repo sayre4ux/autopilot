@@ -64,10 +64,19 @@ Source every factual or numeric claim.
 
 ## Completion callback and wake
 
-The orchestrator never idles while workers run. Every dispatch vehicle either returns its
-result inline or pings back and wakes the dispatching session when it finishes. This matters
-most when the session is headless (`claude -p` under super.engineering): the turn ends, the
-process exits, and a queued callback message is the only thing that starts it again.
+The orchestrator never idles while workers run. Every dispatch vehicle *in the table below*
+either returns its result inline or pings back and wakes the dispatching session when it
+finishes. This matters most when the session is headless (`claude -p` under
+super.engineering): the turn ends, the process exits, and a queued callback message is the
+only thing that starts it again.
+
+A vehicle's own delivery flag is not a wake. `delivered: true`, `fan_in_notified: true`, or a
+successful send confirms that the notification left the sender — not that a session which has
+already ended its turn will resume. Only the mechanisms listed below have verified restart
+behavior in this environment. Any other vehicle counts as having no wake signal: run it
+synchronously, or block on it before ending the turn, or record the poll command in the
+ledger row and check it on the next turn. Never end a turn asserting a wake you have not
+verified.
 
 ### Resolve the callback address once per job
 
@@ -90,10 +99,11 @@ is the pre-callback behavior and is always correct, only slower. Never invent a 
 |---|---|
 | Agent tool (native roles) | The tool return is the ping. Synchronous by construction; add nothing. |
 | Registry `mcp` worker | The tool return is the ping. Synchronous. |
-| Registry `cli` worker (codex, grok, gpt-*, opencode) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
+| Registry `cli` worker (codex, grok, gpt-*, opencode, omp) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
 | sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. |
+| `sc team run` fan-in | **No verified wake.** `--notify self` sets `fan_in_notified: true` once sc hands the completion to the registered creator, but a headless session that already ended its turn is not restarted by it (observed 2026-07-30, run `d927b26078e8`: both roles reported, notified true, no turn). Either block with `sc agent wait --to label:<role> --idle` before ending the turn, or write `Poll: sc team status --run <id>` into the row and read the roles' `report.result_file` on the next turn. |
 
-Claude, Codex, and Grok are all covered — not because each model is asked to be polite, but
+On those vehicles Claude, Codex, and Grok are all covered — not because each model is asked to be polite, but
 because the ping is emitted by the wrapper that owns the process, and only falls back to a
 model instruction where no wrapper exists.
 

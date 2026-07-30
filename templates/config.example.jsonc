@@ -37,7 +37,10 @@
     "codex-cli":              true,
     "gpt-5.6-luna-high-cli":  true,
     "opencode-cli":           true,
-    "order": ["gpt-5.6-luna-xhigh-cli", "gpt-5.6-sol-cli", "grok-cli", "codex-cli", "gpt-5.6-luna-high-cli", "opencode-cli"]
+    // omp runs on whatever model omp itself is configured for, so it sits last: cheap bulk
+    // execution, and never counted on for family independence.
+    "omp-cli":                true,
+    "order": ["gpt-5.6-luna-xhigh-cli", "gpt-5.6-sol-cli", "grok-cli", "codex-cli", "gpt-5.6-luna-high-cli", "opencode-cli", "omp-cli"]
   },
 
   // Where setup installed the runner (setup writes this; edit only if you moved it).

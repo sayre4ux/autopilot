@@ -31,7 +31,10 @@ files in this skill as executable doctrine; do not improvise past a relevant rub
 9. Never idle waiting and never leave work running with no wake signal. Every dispatch either
    returns inline or pings back to the callback address resolved at startup. Fan-out
    dispatches detached, marks its rows `awaiting`, and ends the turn; if no callback address
-   resolved, dispatch synchronously instead. See the callback section of
+   resolved, dispatch synchronously instead. A vehicle whose wake is not listed in
+   `references/dispatch.md` counts as no wake signal, and a sender-side `delivered`/`notified`
+   flag is not a wake — block on the work or record its poll command in the row instead of
+   promising a resumption you have not verified. See the callback section of
    `references/dispatch.md`.
 
 ## Cost and context discipline

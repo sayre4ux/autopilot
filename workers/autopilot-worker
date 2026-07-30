@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import os
 from pathlib import Path
@@ -51,6 +50,7 @@ TEMPLATE_PATTERN = re.compile(
     r"\$\{(task_id|brief_path|prompt|workdir|output_dir|output_file)\}"
 )
 TARGET_PREFIXES = ("id:", "label:", "group:", "view:", "tab:", "pane:", "chat:")
+VCS_DIRS = frozenset({".git", ".hg", ".svn"})
 EXIT_STATUS = {
     0: "success",
     EXIT_WORKER_FAILED: "failed",
@@ -315,9 +315,37 @@ def _json_pointer(value: Any, dotted_path: str | None) -> Any:
 
 
 def _matching_files(pattern: str, workdir: Path) -> list[Path]:
-    if not os.path.isabs(pattern):
-        pattern = str(workdir / pattern)
-    return sorted(Path(path) for path in glob.glob(pattern, recursive=True) if Path(path).is_file())
+    # Path.glob is used over glob.glob because the latter never matches a dotfile or anything
+    # under a dot-directory, which silently hid work confined to .github/ or .gitignore.
+    if os.path.isabs(pattern):
+        base = Path(Path(pattern).anchor)
+        relative = os.path.relpath(pattern, base)
+    else:
+        base, relative = workdir, pattern
+    return sorted(
+        path
+        for path in base.glob(relative)
+        if path.is_file() and VCS_DIRS.isdisjoint(path.parts)
+    )
+
+
+def _vcs_ignored(paths: list[Path], workdir: Path) -> set[Path]:
+    """Paths git ignores. Fails open to the empty set so results are never lost to a git error."""
+    if not paths:
+        return set()
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(workdir), "check-ignore", "--stdin"],
+            input="\n".join(str(path) for path in paths),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    if result.returncode not in (0, 1):
+        return set()
+    return {Path(line) for line in result.stdout.splitlines() if line}
 
 
 def _snapshot(pattern: str, workdir: Path) -> dict[Path, tuple[int, int]]:
@@ -416,7 +444,15 @@ def _render_output(
             or path not in worktree_before
             or (path.stat().st_mtime_ns, path.stat().st_size) != worktree_before[path]
         ]
-        raw = "\n".join(str(path.relative_to(workdir)) for path in matches)
+        # A deletion is real work, and listing it is what keeps a delete-only task from
+        # rendering as empty output and therefore as a failed run.
+        deleted = sorted(set(worktree_before or {}).difference(current))
+        # Build artifacts a repo already ignores are not results; counting them let a worker
+        # that only produced __pycache__ report success.
+        noise = _vcs_ignored(matches + deleted, workdir)
+        lines = [str(path.relative_to(workdir)) for path in matches if path not in noise]
+        lines += [f"deleted: {path.relative_to(workdir)}" for path in deleted if path not in noise]
+        raw = "\n".join(lines)
 
     if format_name == "json" and raw:
         extracted = _json_pointer(json.loads(raw), pointer if channel == "stdout" else None)

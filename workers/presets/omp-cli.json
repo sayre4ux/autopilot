@@ -1,0 +1,40 @@
+{
+  "id": "omp-cli",
+  "type": "cli",
+  "displayName": "omp CLI (oh-my-pi, omp-configured model)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test",
+    "docs"
+  ],
+  "modelFamily": "omp-configured",
+  "preferWhen": "Bulk code execution on whatever model omp is already configured for, when the brief is fully specified and no per-record model pin is wanted.",
+  "avoidWhen": "Security-sensitive work; visual deliverables; any review that must come from a guaranteed independent family, because this record's family follows local omp configuration rather than the record. When this record is the producer, resolve modelRoles.default from ~/.omp/agent/config.yml before seating a reviewer: 'omp-configured' differs from every real family string and would otherwise fake cross-family independence.",
+  "trusted": false,
+  "cli": {
+    "command": "omp",
+    "args": [
+      "-p",
+      "--cwd",
+      "${workdir}",
+      "--no-session",
+      "--auto-approve",
+      "@${brief_path}"
+    ],
+    "promptDelivery": "file",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 900,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "worktree",
+    "format": "text",
+    "resultPointer": "**/*"
+  }
+}

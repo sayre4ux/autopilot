@@ -12,7 +12,7 @@ PRINT_ARGV = "import sys, json; print(json.dumps(sys.argv[1:]))"
 SLEEP_THEN_PRINT = "import sys, time; time.sleep(float(sys.argv[1])); print('done')"
 
 
-def make_workspace(tmp_path, cli, brief_text="brief body", git=False):
+def make_workspace(tmp_path, cli, brief_text="brief body", git=False, output=None):
     """Build an isolated HOME + workdir + registry record and return the run() inputs."""
     home = tmp_path / "home"
     (home / ".autopilot" / "workers").mkdir(parents=True)
@@ -32,6 +32,8 @@ def make_workspace(tmp_path, cli, brief_text="brief body", git=False):
             **cli,
         },
     }
+    if output is not None:
+        record["output"] = output
     registry = workdir / ".autopilot" / "workers"
     registry.mkdir(parents=True)
     (registry / "test-worker.json").write_text(json.dumps(record), encoding="utf-8")
@@ -191,3 +193,62 @@ def test_nonzero_worker_exit_is_worker_failed(tmp_path):
     assert completed.returncode == 2
     assert meta["exit"] == 7
     assert meta["timedOut"] is False
+
+
+WORKTREE_OUTPUT = {"channel": "worktree", "format": "text", "resultPointer": "**/*"}
+WRITE_DOTFILE = (
+    "import pathlib; d = pathlib.Path('.github/workflows'); d.mkdir(parents=True); "
+    "(d / 'ci.yml').write_text('on: push\\n')"
+)
+DELETE_TRACKED = "import pathlib; pathlib.Path('seed.txt').unlink()"
+WRITE_IGNORED_ONLY = (
+    "import pathlib; d = pathlib.Path('.autopilot/junk'); d.mkdir(parents=True); "
+    "(d / 'noise.pyc').write_text('bytecode')"
+)
+
+
+def test_worktree_channel_reports_a_change_confined_to_a_dot_directory(tmp_path):
+    home, workdir, out_dir, brief = make_workspace(
+        tmp_path,
+        {"command": "python3", "args": ["-c", WRITE_DOTFILE], "cwd": "${workdir}", "timeoutSec": 60},
+        git=True,
+        output=WORKTREE_OUTPUT,
+    )
+    completed, meta, output = run_worker(home, workdir, out_dir, brief)
+
+    assert completed.returncode == 0, completed.stderr
+    assert ".github/workflows/ci.yml" in output
+    assert meta["outputBytes"] > 0
+    # Repository internals are never work product, however the pointer is written.
+    assert ".git/" not in output
+
+
+def test_worktree_channel_reports_a_deletion_instead_of_empty_output(tmp_path):
+    home, workdir, out_dir, brief = make_workspace(
+        tmp_path,
+        {"command": "python3", "args": ["-c", DELETE_TRACKED], "cwd": "${workdir}", "timeoutSec": 60},
+        git=True,
+        output=WORKTREE_OUTPUT,
+    )
+    completed, meta, output = run_worker(home, workdir, out_dir, brief)
+
+    assert completed.returncode == 0, completed.stderr
+    assert "deleted: seed.txt" in output
+    assert meta["outputBytes"] > 0
+
+
+def test_worktree_channel_does_not_accept_vcs_ignored_files_as_output(tmp_path):
+    home, workdir, out_dir, brief = make_workspace(
+        tmp_path,
+        {"command": "python3", "args": ["-c", WRITE_IGNORED_ONLY], "cwd": "${workdir}", "timeoutSec": 60},
+        git=True,
+        output=WORKTREE_OUTPUT,
+    )
+    completed, meta, output = run_worker(home, workdir, out_dir, brief)
+
+    # The worker exited 0 but produced only ignored build noise: that is a failed dispatch.
+    assert completed.returncode == 2
+    assert meta["exit"] == 0
+    assert meta["outputBytes"] == 0
+    assert "expectedOutput=False" in completed.stderr
+    assert "noise.pyc" not in (output or "")
