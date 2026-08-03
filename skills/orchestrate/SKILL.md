@@ -60,6 +60,13 @@ requests it or the work is production-critical.
 Never auto-invoke for documents, decks, visuals, or prose regardless of size. Explicit
 invocation may orchestrate those and routes implementation to `engineer-doc`.
 
+Auto-entry is skill invocation, not dispatch authorization. On an auto-entered job the user
+asked for the work and never asked for agents, and some Claude Code builds inject a
+system-prompt line restricting Agent-tool calls to explicitly requested delegation — see
+Degraded mode. That injection binds the Agent tool only, so it costs nothing when the vehicle
+probe resolves sc or a registry worker. Explicit `/autopilot:orchestrate` satisfies the
+condition outright.
+
 ## Startup
 
 Read, if present, `~/.autopilot/config.jsonc`, then
@@ -118,7 +125,9 @@ Callback: chat:<terminal-id> | none
 
 `Vehicle` in the header is the probe result for the job; the per-row value is what that
 dispatch actually used, so a mid-job degradation stays visible. A missing header line means
-the probe never ran — run it before dispatching rather than assuming `agent-tool`.
+the probe never ran — run it before dispatching rather than assuming `agent-tool`. Mark an
+auto-entered job that degraded to the Agent tool `agent-tool (suppressible)` per Degraded
+mode.
 
 Statuses: `open | active | awaiting | blocked | done | dropped`. `awaiting` means the work is
 running elsewhere and a callback will wake this session; record the callback target, dispatch
@@ -166,6 +175,15 @@ An empty worker registry, missing runner, missing external CLI, or unavailable r
 worker must not break the harness. Fall through to native roles and log why. If only one
 model alias is available, preserve role separation, reduce parallelism, strengthen briefs,
 and pass that alias explicitly to each native dispatch.
+
+Agent-tool dispatch has a suppression mode the other vehicles do not. Claude Code can carry a
+system-prompt line restricting Agent-tool calls to delegation the user asked for, and it
+outranks this skill and any `CLAUDE.md`. On an auto-entered job it can turn an intended
+dispatch into silent inline work. Log `Vehicle: agent-tool (suppressible)` when the job both
+degraded to the Agent tool and auto-entered, so a dispatch that never fired reads differently
+from one that was never planned. Two suppressed dispatches count as the two failures in Hard
+rule 1 — fall through to a registry worker, or state the delegation to the user and let them
+authorize it, rather than restating the policy louder.
 
 An unresolvable callback address is a degradation, not a failure: log `Callback: none`, drop
 `--detach`, and run every dispatch synchronously in-turn. A delivered-false callback in

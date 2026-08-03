@@ -148,6 +148,13 @@ software threshold—more than three files, more than 200 changed lines, or mult
 design—may auto-enter. Document, deck, visual, and prose work enters only when explicitly
 orchestrated.
 
+Auto-entry starts the loop; it does not by itself guarantee that agents spawn. Some Claude
+Code builds inject a system-prompt line restricting Agent-tool calls to delegation the user
+asked for, and it outranks any plugin or `CLAUDE.md` policy. It binds the Agent tool alone,
+so an sc-vehicle or registry-worker dispatch is unaffected — which is the practical reason
+the fallback is the fallback. If a job auto-enters, degrades to Agent-tool dispatch, and then
+completes inline, that is the mechanism; typing `/autopilot:orchestrate` clears it.
+
 Dispatched work pings back. A fan-out of external workers runs detached and each one wakes the
 dispatching session when it finishes, so the orchestrator ends its turn instead of idling —
 which is what makes fan-out usable from a headless `claude -p` session. The runner emits the
