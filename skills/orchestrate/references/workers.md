@@ -125,7 +125,11 @@ should be aware that `autopilot-worker reset` executes directly. The subcommand 
 
 - sc: when startup detection found super.engineering orchestration (`sc` on PATH and
   `sc agents list --output json` succeeds), role dispatches run as labeled sc agents per
-  the sc-managed section of `dispatch.md`. This replaces the Agent-tool vehicle for
+  the sc-managed section of `dispatch.md`. Launch those roles with `--ui chat`; the default
+  resolves to a terminal target that becomes unreachable after its first turn, measured in
+  `dispatch.md`. A mis-launch reports success, so the "any sc failure falls through" rule below
+  cannot catch it — probe instead: `sc agents get --to <target> --output json` must report
+  `capabilities.queue: true`, and a launch that does not is an sc failure. This replaces the Agent-tool vehicle for
   native roles only; registry `cli` and `mcp` records dispatch unchanged. Any sc failure
   falls through to the Agent tool with the same brief — native agents stay the floor.
 - CLI: invoke the installed runner.
@@ -141,8 +145,10 @@ Normalize all paths to `{ outcome, artifacts[], exit, evidence }`.
 
 Wake responsibility differs by path. Agent-tool and MCP dispatch are synchronous — the tool
 return is the ping. CLI dispatch takes `--callback`, and `--detach` when fanning out. The sc
-path carries the callback instruction inside the brief. See the callback section of
-`dispatch.md`; no path may end a turn with work running and no wake signal.
+path carries the callback instruction inside the brief. Claude Code's own cross-session
+messaging socket is a candidate fifth path but is not yet a verified wake — `dispatch.md`
+states the conditions. See the callback section of `dispatch.md`; no path may end a turn with
+work running and no wake signal.
 
 ## Intake and escalation
 

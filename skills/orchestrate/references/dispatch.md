@@ -100,12 +100,96 @@ is the pre-callback behavior and is always correct, only slower. Never invent a 
 | Agent tool (native roles) | The tool return is the ping. Synchronous by construction; add nothing. |
 | Registry `mcp` worker | The tool return is the ping. Synchronous. |
 | Registry `cli` worker (codex, grok, gpt-*, opencode, omp) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
-| sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. |
+| sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. Launch the role with `--ui chat` — a terminal target parks in `review` after its turn, where an unqueued send reports success without running and reads return no content, which disables the fallback. |
 | `sc team run` fan-in | **No verified wake.** `--notify self` sets `fan_in_notified: true` once sc hands the completion to the registered creator, but a headless session that already ended its turn is not restarted by it (observed 2026-07-30, run `d927b26078e8`: both roles reported, notified true, no turn). Either block with `sc agent wait --to label:<role> --idle` before ending the turn, or write `Poll: sc team status --run <id>` into the row and read the roles' `report.result_file` on the next turn. |
+| Native cross-session messaging (`SendMessage` / inbox socket) | **No wake for an sc-managed session.** Claude Code 2.1.224+ binds a per-session inbox socket and starts a new turn when an idle session receives a message, but an sc-managed session's process does not exist between turns: measured 2026-08-09, 75s after a turn ended the registry held no entry for that `sessionId` and there was no socket to post to. Counts as no wake signal here. Unresolved, not refuted, for an orchestrator whose process persists — see below. |
 
 On those vehicles Claude, Codex, and Grok are all covered — not because each model is asked to be polite, but
 because the ping is emitted by the wrapper that owns the process, and only falls back to a
 model instruction where no wrapper exists.
+
+### Native cross-session messaging — measured, not a wake for sc-managed sessions
+
+Claude Code 2.1.224 (macOS and Linux) added `ListAgents` and `SendMessage`. Every
+session that has the feature — including `claude -p`, but not bare mode — binds its own
+inbox socket, restricted to the operating-system user, and exports the path as
+`CLAUDE_CODE_MESSAGING_SOCKET` to hooks and Bash commands
+before any hook runs, `SessionStart` included. Same-machine delivery goes over that socket and
+never reaches Anthropic servers. A message arriving mid-turn is read between tool calls; a
+message arriving at an **idle** session starts a new turn. Confirmed present in an sc-managed
+headless session here on 2.1.226.
+
+Each session registers itself at `~/.claude/sessions/<pid>.json` — `pid`, `sessionId`, `cwd`,
+`messagingSocketPath`, `peerProtocol`, and a derived `name` — and the registry lists live
+sessions only. Each session exports *its own* socket, never one inherited from a parent, so a
+worker that is itself a Claude session sees its own inbox in `CLAUDE_CODE_MESSAGING_SOCKET`,
+not the orchestrator's.
+
+**Measured 2026-08-09, and it settles the vehicle for sc.** An sc-managed session does not
+survive its own turn. Across three consecutive turns of one conversation the `sessionId` stayed
+`0a35309f…` while the pid went 85603 → 80666 → 88282 → 92760, the socket path moved with it,
+and the derived name changed every time (`autopilot-45` → `autopilot-29` → `autopilot-4b`). A
+detached probe that slept 75s past the end of a turn and then read the registry found **no
+entry at all** for that `sessionId`: the process is gone between turns, there is no socket to
+connect to, and nothing to wake. `sc agent send --queue` persists a wake across that gap
+precisely because it is a queue and not a socket.
+
+So the vehicle is settled negative where Autopilot actually runs, and sc queueing stays
+mandatory for sc-managed orchestrators. It is *not* settled negative in general: a persistent
+interactive session on the same machine stayed registered across the whole window, so the
+mechanism is real for a `claude` session someone is sitting in front of.
+
+Two addressing consequences hold regardless, and both would silently misfire:
+
+- **Never carry a socket path across a turn boundary.** By the time a worker finishes, the path
+  it captured at dispatch is gone. Carry the `sessionId` and resolve it against the registry at
+  send time.
+- **Never address a peer by name across a turn boundary.** The derived name is regenerated on
+  every respawn, so a stale name either matches nothing or, on a busy machine, matches a
+  different session. `sessionId` is the only stable handle observed.
+
+The remaining conditions below are unresolved and would still have to be cleared before any
+non-sc use of this channel:
+- **The inbound default holds messages in bypass sessions.** Inbound controls govern the
+  *receiver*, which in the callback flow is the dispatching session, not the worker. With no
+  `crossSessionInbound` value set, a receiver that bypasses permission prompts delivers only
+  what a sender identifying itself as also bypassing sent, and holds anything asserting no
+  permission class for approval — which is what a raw socket post from a runner asserts. A `-p`
+  session cannot render the approval dialog, so a held message stays held until a mode or
+  settings change releases it. An orchestrator that intends to be woken this way therefore
+  starts itself with `crossSessionInbound: "accept"` in its `--settings`.
+- **Own-child verification is weaker on macOS.** The one exemption to that hold is a message
+  Claude Code verifies came from the session's own child process. On Linux it can verify a
+  child that has already exited; on macOS only while the posting process still runs, and in a
+  container where Claude Code is PID 1 not at all. A `--detach` runner re-execs into its own
+  session, so it likely fails verification even though a foreground `--callback` run would pass.
+- **Availability is gated.** Unavailable on native Windows and on Bedrock, Claude Platform on
+  AWS, Google Cloud's Agent Platform, and Microsoft Foundry, and it is switched off entirely
+  when `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_TELEMETRY`, `DO_NOT_TRACK`, or
+  `DISABLE_GROWTHBOOK` disables feature-flag evaluation. Any deployment must probe rather than
+  assume: `/list-agents` unrecognized means the session does not have it, and `/status` shows
+  the session's own address in its `Peer address` row. Delivery is also filesystem-scoped —
+  two sessions reach each other only when they see the same registry files, so a session in a
+  container and one on the host cannot message each other.
+
+What would qualify it for the table in a context where the orchestrator *does* persist: a
+detached `autopilot-worker` run that resolves the orchestrator's `sessionId` against the
+registry after that session's turn has ended, posts to the socket it finds, and is observed to
+start a new turn there. Run it in both receiver configurations, because one run cannot separate
+the failures — under `crossSessionInbound: "accept"` a restart proves reachability and says
+nothing about own-child verification, which the `accept` has made moot, while under the default
+a silent no-turn is indistinguishable between an unreachable socket and a message held
+unverified. A third silent no-turn shares the same signature: a post from inside the sandbox
+cannot reach the socket unless `sandbox.network.allowUnixSockets` or `allowAllUnixSockets`
+permits it. Pin both the receiver's `crossSessionInbound` and the poster's sandbox
+configuration in the experiment record. Anything short of an observed restart is a `delivered`
+flag, which the rule above already says is not a wake.
+
+Three further limits apply whatever that experiment shows: messages are plain text only, so a
+payload stays the self-describing XML below rather than becoming a structured channel; repeats
+from one sender are rate-limited and identical repeats arriving within a short window are
+dropped; and a session's unread queue caps at 50, so a fan-out wider than that cannot rely on
+the socket alone.
 
 ### CLI workers — runner-emitted callback
 
@@ -150,6 +234,45 @@ Every sc brief carries this block verbatim, in addition to the canonical dispatc
 An LLM can forget its final action, so the callback never removes the fallback: an sc task
 whose row is still awaiting past its expected duration is reconciled with
 `sc agent wait --to label:t-###-<role> --idle --timeout-ms <N>` and `sc agent read`.
+
+#### Launch role agents with `--ui chat`
+
+`sc layout run` accepts `--ui auto|chat|terminal` and `auto` resolves to a terminal target,
+which is the wrong target type for a dispatched role. Pass `--ui chat` explicitly. Measured
+here on 2026-08-09, same prompt and provider on each target type:
+
+| | `ui: terminal` | `ui: chat` |
+|---|---|---|
+| State after its turn ends | `review` / `idle`, entered automatically with no human action | `idle` / `idle` |
+| `capabilities.queue` | `false` from launch, so `sc agent send --queue` fails `code: "busy"` | `true` |
+| `sc agent send` while in `review` | returns `ok: true`, does not run; buffered until a human touches the tab, then fires | n/a, admitted and running within 4s |
+| `sc agent read` | terminal snapshot, and **no `lines` key at all** while in `review` | `content_mode: "structured"`, role/text messages |
+
+The `review` state is the trap. It is not a first-launch trust banner — that appears once per
+new tab and is unrelated. It is where a terminal target parks after every completed turn, and
+while parked it accepts sends that report success and do nothing, and serves reads with no
+content. `sc agent wait --idle` has also returned `idle` against a terminal target that was
+still mid-turn, so the documented reconcile pair can report a finished task that is running and
+a reachable target that is inert.
+
+This does not put the callback at risk. The callback's *receiver* is the orchestrator, which
+the address rule above already requires to be a target reporting `capabilities.queue: true` —
+a terminal-UI orchestrator has no callback address at all and degrades to synchronous dispatch
+rather than trusting a buffered send. The role agent is inferred to send from inside its own
+turn, before it parks; the measurements above cover a terminal target's inbound sends only, not
+its outbound one.
+
+What breaks is every orchestrator-to-role message after that first turn — a retry, a
+clarification, a `judgment.md` follow-up — plus the reconcile path that is supposed to catch a
+forgotten callback. Only the unqueued form fails silently. `sc agent send --queue` against a
+terminal target fails loudly with `code: "busy"` from launch onward, because the target never
+reports `queue: true`, so the brief's `--queue` callback and any queued follow-up are
+detectable failures rather than lost ones.
+
+Two operational notes from the same run. `sc layout run tabs` reuses an existing compatible tab
+rather than always allocating a new one, and will replace a session already living there;
+`sc agents list --output json` before launching shows what is occupied. And `--tab N` is
+rejected by the `tabs` shape, so tab placement cannot be pinned that way.
 
 ### Callback payload
 
