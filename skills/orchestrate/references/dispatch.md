@@ -93,15 +93,22 @@ no callback address: log the degradation and run every dispatch synchronously. S
 is the pre-callback behavior and is always correct, only slower. Never invent a target;
 `sc agents list --output json` shows the real ids.
 
+More than one app instance can be running, and a terminal id is only meaningful against the
+instance that owns it. `sc instance current --json` names the instance this session belongs
+to and `sc instance list --json` shows the rest; when they disagree with where the read
+resolved, pin every callback command for the job to that instance with the global
+`--socket PATH`. An address resolved against one instance and used against another is a send
+that reports success into a different app.
+
 ### Who pings back, by vehicle
 
 | Vehicle | Wake mechanism |
 |---|---|
-| Agent tool (native roles) | The tool return is the ping. Synchronous by construction; add nothing. |
+| Agent tool (native roles) | The tool return is the ping. Verify per session rather than assuming: Claude Code 2.1.232 made non-teammate agent spawns in interactive sessions run in the background by default, where the call returns an agent id and the result arrives later as a task notification. A dispatch that returns an id instead of a report is background, not complete — treat the notification as the wake and never read the id as the result. |
 | Registry `mcp` worker | The tool return is the ping. Synchronous. |
 | Registry `cli` worker (codex, grok, gpt-*, opencode, omp) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
 | sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. Launch the role with `--ui chat` — a terminal target parks in `review` after its turn, where an unqueued send reports success without running and reads return no content, which disables the fallback. |
-| `sc team run` fan-in | **No verified wake.** `--notify self` sets `fan_in_notified: true` once sc hands the completion to the registered creator, but a headless session that already ended its turn is not restarted by it (observed 2026-07-30, run `d927b26078e8`: both roles reported, notified true, no turn). Either block with `sc agent wait --to label:<role> --idle` before ending the turn, or write `Poll: sc team status --run <id>` into the row and read the roles' `report.result_file` on the next turn. |
+| `sc team run` fan-in | **No verified wake.** `--notify self` sets `fan_in_notified: true` once sc hands the completion to the registered creator, but a headless session that already ended its turn is not restarted by it (observed 2026-07-30, run `d927b26078e8`: both roles reported, notified true, no turn). Either block with `sc agent wait --to label:<role> --idle` before ending the turn, or write `Poll: sc team status --run <id>` into the row and read the roles' `report.result_file` on the next turn. A run that was nonterminal when the app restarted becomes Interrupted and is never resumed, so that poll can await a completion that will never arrive: treat an Interrupted status as a failed dispatch and re-dispatch. |
 | Native cross-session messaging (`SendMessage` / inbox socket) | **No wake for an sc-managed session.** Claude Code 2.1.224+ binds a per-session inbox socket and starts a new turn when an idle session receives a message, but an sc-managed session's process does not exist between turns: measured 2026-08-09, 75s after a turn ended the registry held no entry for that `sessionId` and there was no socket to post to. Counts as no wake signal here. Unresolved, not refuted, for an orchestrator whose process persists — see below. |
 
 On those vehicles Claude, Codex, and Grok are all covered — not because each model is asked to be polite, but
@@ -172,6 +179,13 @@ non-sc use of this channel:
   two sessions reach each other only when they see the same registry files, so a session in a
   container and one on the host cannot message each other.
 
+Claude Code 2.1.236 added `notify_when_idle` to `SendMessage`: an opt-in, one-shot request
+that another session on this machine send one notice when it next goes idle, with no polling.
+It does not change the verdict for sc — an sc-managed orchestrator has no process to notify
+between turns — but it is the cheaper form of the experiment below for a persistent
+orchestrator, because it is a first-class tool parameter rather than a raw socket post from a
+runner, so it sidesteps the own-child verification condition entirely. Run that variant first.
+
 What would qualify it for the table in a context where the orchestrator *does* persist: a
 detached `autopilot-worker` run that resolves the orchestrator's `sessionId` against the
 registry after that session's turn has ended, posts to the socket it finds, and is observed to
@@ -238,8 +252,17 @@ whose row is still awaiting past its expected duration is reconciled with
 #### Launch role agents with `--ui chat`
 
 `sc layout run` accepts `--ui auto|chat|terminal` and `auto` resolves to a terminal target,
-which is the wrong target type for a dispatched role. Pass `--ui chat` explicitly. Measured
-here on 2026-08-09, same prompt and provider on each target type:
+which is the wrong target type for a dispatched role. Pass `--ui chat` explicitly — but only
+for a provider that supports it. `sc layout capabilities --output json` reports
+`terminal_chat_compatible` and `structured_read` per provider, and both are false for several
+(observed false for `antigravity`, `copilot`, `factory`, `gemini`, `hermes`, `kiro`,
+`prime-agent`, `qwen`; true for `claude`, `codex`, `cursor`, `grok`, `kimi`, `omp`,
+`opencode`, `pi`). Read those two flags before choosing a role's provider. A provider with
+`terminal_chat_compatible: false` cannot be launched into the safe target type at all, and one
+with `structured_read: false` returns a terminal snapshot from `sc agent read` rather than
+role/text messages — on either, the reconcile path below is unavailable, so dispatch that role
+synchronously or seat it on a chat-capable provider instead. Measured here on 2026-08-09, same
+prompt and provider on each target type:
 
 | | `ui: terminal` | `ui: chat` |
 |---|---|---|
@@ -466,10 +489,15 @@ teams, or sessions.
 
 1. Launch, first prompt only: `sc layout run panes ... --label t-###-<role> --output
    json` with the brief as the prompt. Consult `sc layout run --help` once per session
-   for prompt-input flags; prefer file input for long briefs. Resolve
-   `--provider/--model/--reasoning` from `sc layout capabilities --output json` plus the
-   effort policy in `roles.md`; never invent a model id. Include the `<callback>` block from
-   the callback section, with the task id and terminal id already substituted.
+   for prompt-input flags; pass long briefs with `--from-file <abs>` rather than inline.
+   Put the `<system>` block in `--system-prompt` instead of folding it into the prompt — an sc
+   session carries no plugin agent frontmatter, and this is the field for role identity.
+   `sc layout capabilities --output json` resolves `--provider` only: it lists provider keys
+   and the compatibility flags above, and carries **no model ids and no reasoning levels**.
+   Take `--reasoning` from the effort policy in `roles.md`, and omit `--model` so the provider
+   default applies unless the user named a model id — never invent one, and never read one out
+   of capabilities. Include the `<callback>` block from the callback section, with the task id
+   and terminal id already substituted.
 2. Collect the result one of two ways. A single short dispatch waits in-turn:
    `sc agent wait --to label:t-###-<role> --idle --timeout-ms <N> --output json`. A fan-out,
    or any agent expected to run for minutes, relies on the callback: mark the row `awaiting`
@@ -479,7 +507,20 @@ teams, or sessions.
    then inspect the real artifacts on disk — the transcript is a claim, not evidence.
 4. Follow-ups — retry with attached output, revision rounds, reviewer findings — go to the
    same agent via `sc agent send --to label:t-###-<role> --prompt <text> --queue
-   --output json`, never a second `sc layout run` for the same worker.
+   --output json`, never a second `sc layout run` for the same worker. `--queue` and
+   `--wait-until-idle` are alternatives: `--queue` admits the message immediately and fails
+   loudly with `code: "busy"` against a target that never reports `queue: true`, while
+   `--wait-until-idle` blocks until the target is free and then dispatches. Keep `--queue` for
+   the callback and for any send that must not hold the turn open; use `--wait-until-idle` only
+   for an in-turn follow-up to a target already known to be mid-run. Neither confirms turn
+   completion — that is still `sc agent wait --idle` plus `sc agent read`.
+
+`sc agent subscribe --to label:t-###-<role>` streams that target's events for an in-turn watch
+and emits a `target_error` before stopping when the provider's turn fails, which distinguishes
+a crashed role from a slow one without polling `sc agent read`. A long-running role brief may
+call `sc agent should-stop --self` at checkpoints so an orchestrator cancellation is honoured
+between steps rather than only by `sc agent stop`. Neither is a wake: both need a live
+orchestrator process, so they belong to synchronous and in-turn paths only.
 
 `sc agents group create` plus `sc agent send --to group:<name>` may fan one shared
 announcement to independent workers. `sc coordination-state get|set` (with `--if-version`

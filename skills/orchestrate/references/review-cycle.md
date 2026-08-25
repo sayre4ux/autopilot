@@ -20,8 +20,12 @@ fallback. Review unavailability never breaks execution.
 
 Under sc-managed orchestration, the reviewer (and verifier) launches as a fresh labeled sc
 agent, preferring a provider different from the producer's when `sc layout capabilities
---output json` lists one. Fresh session equals fresh context; never reuse the producer's
-sc agent for its own review.
+--output json` lists one as `available`. Restrict that choice to providers reporting
+`terminal_chat_compatible: true` and `structured_read: true` — a reviewer seated elsewhere
+cannot be launched into a chat target and returns a terminal snapshot instead of a readable
+report, which defeats the point of a separate reviewer. If no second provider clears both
+flags, keep the producer's provider and take the independence from the fresh session. Fresh
+session equals fresh context; never reuse the producer's sc agent for its own review.
 
 ## Adversarial panel
 

@@ -60,12 +60,14 @@ requests it or the work is production-critical.
 Never auto-invoke for documents, decks, visuals, or prose regardless of size. Explicit
 invocation may orchestrate those and routes implementation to `engineer-doc`.
 
-Auto-entry is skill invocation, not dispatch authorization. On an auto-entered job the user
-asked for the work and never asked for agents, and some Claude Code builds inject a
-system-prompt line restricting Agent-tool calls to explicitly requested delegation — see
-Degraded mode. That injection binds the Agent tool only, so it costs nothing when the vehicle
-probe resolves sc or a registry worker. Explicit `/autopilot:orchestrate` satisfies the
-condition outright.
+Auto-entry is skill invocation, not dispatch authorization, and the restriction is no longer
+Agent-tool-only. Claude Code injects a system-prompt line confining Agent-tool calls to
+explicitly requested delegation, and `sc instructions orchestration` independently states
+that delegation language never authorizes `sc agent|agents|team|layout` and that delegation
+must not be inferred from task size — see Degraded mode. On an auto-entered job the user
+asked for the work and never asked for agents, so both vehicles are suppressed and only
+registry `cli`/`mcp` workers invoked through Bash remain. Explicit `/autopilot:orchestrate`
+satisfies both conditions outright and is the intended entry for delegated work.
 
 ## Startup
 

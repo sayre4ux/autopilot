@@ -28,8 +28,10 @@ sc path's `--reasoning` or a distinct definition, never an Agent-tool argument. 
 
 When sc-managed orchestration is detected, dispatch these roles as labeled sc agents per
 `dispatch.md` instead of Agent-tool subagents. The brief's `<system>` block replaces agent
-frontmatter entirely; the resolved alias/effort maps to `--model`/`--reasoning` using ids
-listed by `sc layout capabilities --output json`. Role boundaries, effort policy, and the
+frontmatter entirely and is passed as `--system-prompt`, not folded into the prompt. The
+resolved effort maps to `--reasoning`; `sc layout capabilities --output json` lists provider
+keys only and carries no model ids, so `--model` is omitted and the provider default applies
+unless the user named an id. Role boundaries, effort policy, and the
 no-agent-spawning rule apply unchanged. The Agent tool is the degraded floor for when sc is
 absent or fails — not the default to fall back on because the probe was skipped.
 
