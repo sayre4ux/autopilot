@@ -30,7 +30,10 @@ CAPABILITIES = {
     "data",
     "security",
     "research",
+    "design",
 }
+# Long-turn workers (max-effort coding) routinely run past an hour.
+MAX_TIMEOUT_SEC = 14400
 TOP_LEVEL_KEYS = {
     "id",
     "type",
@@ -207,7 +210,7 @@ def _validate_record(record: Any, source: Path) -> dict[str, Any]:
         if variant["promptDelivery"] not in {"arg", "stdin", "file"}:
             raise RegistryError(f"{source}: invalid cli.promptDelivery")
         _require_type(variant["timeoutSec"], int, "cli.timeoutSec")
-        if not 1 <= variant["timeoutSec"] <= 3600:
+        if not 1 <= variant["timeoutSec"] <= MAX_TIMEOUT_SEC:
             raise RegistryError(f"{source}: cli.timeoutSec is out of range")
         if not isinstance(variant["successExitCodes"], list) or not all(
             isinstance(item, int) and not isinstance(item, bool)
@@ -261,7 +264,7 @@ def _validate_record(record: Any, source: Path) -> dict[str, Any]:
         _require_type(variant["tool"], str, "mcp.tool")
         _require_type(variant["argsTemplate"], dict, "mcp.argsTemplate")
         _require_type(variant["timeoutSec"], int, "mcp.timeoutSec")
-        if not 1 <= variant["timeoutSec"] <= 3600:
+        if not 1 <= variant["timeoutSec"] <= MAX_TIMEOUT_SEC:
             raise RegistryError(f"{source}: mcp.timeoutSec is out of range")
         if "resultField" in variant and not (
             isinstance(variant["resultField"], str) or variant["resultField"] is None
@@ -761,8 +764,8 @@ def main() -> int:
         args = _parser().parse_args()
         if args.subcommand == "reset":
             return _reset(args)
-        if args.timeout is not None and not 1 <= args.timeout <= 3600:
-            raise RegistryError("--timeout must be between 1 and 3600")
+        if args.timeout is not None and not 1 <= args.timeout <= MAX_TIMEOUT_SEC:
+            raise RegistryError(f"--timeout must be between 1 and {MAX_TIMEOUT_SEC}")
         if args.detach and not args.callback:
             raise RegistryError("--detach requires --callback; otherwise the result is lost")
         if args.detach:

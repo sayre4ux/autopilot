@@ -134,6 +134,26 @@ def test_timeout_flag_overrides_a_longer_registry_timeout(tmp_path):
     assert meta["durationSec"] < 15
 
 
+def test_multi_hour_registry_timeout_is_accepted(tmp_path):
+    home, workdir, out_dir, brief = make_workspace(
+        tmp_path, {"command": "python3", "args": ["-c", "print('ok')"], "timeoutSec": 14400}
+    )
+    completed, meta, output = run_worker(home, workdir, out_dir, brief)
+
+    assert completed.returncode == 0, completed.stderr
+    assert output.strip() == "ok"
+
+
+def test_timeout_above_the_cap_is_a_registry_error(tmp_path):
+    home, workdir, out_dir, brief = make_workspace(
+        tmp_path, {"command": "python3", "args": ["-c", "pass"], "timeoutSec": 14401}
+    )
+    completed, _, _ = run_worker(home, workdir, out_dir, brief)
+
+    assert completed.returncode == 3
+    assert "timeoutSec is out of range" in completed.stderr
+
+
 def test_successful_run_writes_a_complete_manifest_in_a_git_workdir(tmp_path):
     home, workdir, out_dir, brief = make_workspace(
         tmp_path,

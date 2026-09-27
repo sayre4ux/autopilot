@@ -12,7 +12,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/sayre4ux/autopilot/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/actions/workflows/ci.yml)
 [![Claude Code plugin](https://img.shields.io/badge/claude%20code-plugin-8b5cf6?style=flat-square&labelColor=1c1b22)](https://docs.claude.com/en/docs/claude-code/overview)
-[![Version](https://img.shields.io/badge/version-0.1.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
 
@@ -28,7 +28,7 @@ Claude Code plugin for jobs too big for one context. It plans, dispatches
 fresh-context agents, and distrusts everything that comes back.
 
 - **Task ledger** — work survives restarts and context resets
-- **Six native roles + external workers** — Codex, Grok, GPT through one runner
+- **Eight native roles + external workers** — Codex (GPT-6), Grok, and others through one runner
 - **Adversarial review** — 2+ independent reviewers assume the code is wrong;
   authors are staked to pass in one round
 - **Evidence gates** — same intake for every result, whoever produced it
@@ -43,7 +43,7 @@ fresh-context agents, and distrusts everything that comes back.
 ```
 
 Autopilot is an MIT-licensed Claude Code plugin for work that is too large for one context.
-It packages a persistent task ledger, self-contained dispatch briefs, six native roles,
+It packages a persistent task ledger, self-contained dispatch briefs, eight native roles,
 adversarial severity-gated review, and an optional registry of external coding workers.
 
 Quality does not depend on which worker produced the change. Every result returns through
@@ -61,7 +61,7 @@ The orchestrator probes once per job — `sc` on PATH and `sc agents list --outp
 succeeding — and if it answers, four things change:
 
 - **Roles become real agents.** Each dispatch launches as a labeled sc agent
-  (`t-###-<role>`) in its own pane through `sc layout run`, so you watch six roles work
+  (`t-###-<role>`) in its own pane through `sc layout run`, so you watch each role work
   instead of waiting on an opaque subagent. Follow-ups, retries, and review rounds go back
   to the same live agent with `sc agent send`.
 - **Cross-family review stops being aspirational.** The adversarial panel resolves real
@@ -70,7 +70,7 @@ succeeding — and if it answers, four things change:
   [Field results](#field-results) is what this buys.
 - **Fan-out survives a headless session.** `sc agents get` resolves a callback address, so
   finished workers wake the dispatching session by queued message rather than by being
-  waited on. Without a resolvable address every dispatch simply stays synchronous.
+  waited on. Without one, a headless session keeps every dispatch in-turn.
 - **True isolation when paths overlap.** Parallel code briefs touching the same files take
   `sc worktree create` instead of sharing one working tree — only ever on your explicit
   request.
@@ -113,7 +113,7 @@ flowchart TB
 
     subgraph plugin["Plugin package"]
         SK["skills/<br/>setup · orchestrate + references"]
-        AG["agents/<br/>architect · engineer · engineer-doc<br/>security-engineer · verifier · reviewer"]
+        AG["agents/<br/>architect · engineer · senior-engineer · engineer-doc<br/>security-engineer · verifier · reviewer · supervisor"]
         HK["hooks/<br/>guard-bash · ledger-nudge"]
         WR["workers/<br/>autopilot-worker runner + presets"]
     end
@@ -124,7 +124,7 @@ flowchart TB
     HK -.guards every session.-> O
 
     WR --> EXT["External workers<br/>Codex · Grok · GPT · opencode · omp · MCP"]
-    EXT -. detached run, pings back .-> O
+    EXT -. background run, wakes session .-> O
 
     AG --> IN[Intake gates<br/>evidence required]
     EXT --> IN
@@ -142,28 +142,52 @@ flowchart TB
     O --> DL["DEVLOG.md<br/>(committed handover, if present)"]
 ```
 
-Native roles cover architecture, code, visual documents, security, verification, and
-review. The orchestrator is the only dispatcher; agents never spawn agents. Work above the
+Native roles cover architecture, code at two effort tiers, visual documents, security,
+verification, review, and project-level supervision. The orchestrator is the only
+dispatcher; agents never spawn agents.
+
+| Role | Model / effort | Job |
+|---|---|---|
+| architect | opus / high | Design, trade-offs, arbitration; no production code |
+| engineer | opus / medium | Normal code, scripts, data |
+| senior-engineer | opus / high | Code where a defect is expensive: interfaces, concurrency, migrations, data integrity |
+| engineer-doc | opus / medium | Documents and visuals, rendered and inspected |
+| security-engineer | opus / high | Auth, secrets, crypto, validation, hardening |
+| verifier | opus / high | `CONFIRMED` or `REFUTED`; never fixes |
+| reviewer | opus / high | Adversarial findings by severity; never fixes |
+| supervisor | fable / high | `ON-TRACK`, `DRIFT`, or `STOP` for the whole job, at plan, milestone, escalation, and final gates |
+
+Efforts are tuned for Claude Opus 5.5, where `medium` does roughly what Opus 5 did at `high`.
+The orchestrator itself runs on `opus`: Fable costs 2.5x per token and its safety classifiers
+can decline defensive security work partway through, so it supervises rather than drives. Work above the
 software threshold—more than three files, more than 200 changed lines, or multi-component
 design—may auto-enter. Document, deck, visual, and prose work enters only when explicitly
 orchestrated.
 
 Auto-entry starts the loop; it does not by itself guarantee that agents spawn. Both primary
 vehicles now restrict delegation to what the user asked for, and both outrank any plugin or
-`CLAUDE.md` policy. Claude Code injects a system-prompt line confining Agent-tool calls to
-requested delegation (present at 2.1.241). `sc instructions orchestration` states that
+`CLAUDE.md` policy. Claude Code has injected a system-prompt line confining Agent-tool calls to
+requested delegation (present at 2.1.241; not observed in an interactive 2.1.283 session). `sc instructions orchestration` states that
 subagent, delegation, and parallel-work language never authorizes `sc agent`, `sc agents`,
 `sc team`, or `sc layout`, and that delegation must not be inferred from task size. On an
 auto-entered job the user asked for the work and never asked for agents, so only registry
 CLI workers invoked through Bash remain available. If such a job completes inline, that is
 the mechanism; typing `/autopilot:orchestrate` satisfies both conditions and clears it.
 
-Dispatched work pings back. A fan-out of external workers runs detached and each one wakes the
-dispatching session when it finishes, so the orchestrator ends its turn instead of idling —
-which is what makes fan-out usable from a headless `claude -p` session. The runner emits the
-callback for CLI workers (Codex, Grok, GPT, opencode, omp) on every exit path; sc-managed agents
-carry the send command in their brief; Agent-tool and MCP dispatches are synchronous already.
-Without a resolvable callback address every dispatch simply stays synchronous.
+Dispatched work wakes the session when it finishes, so the orchestrator ends its turn instead of
+idling. There are two wake channels:
+
+- **sc callback.** With a resolved sc address, the runner emits the callback for CLI workers
+  (Codex, Grok, opencode, omp) on every exit path, and sc-managed agents carry the send command
+  in their brief. It survives the orchestrator's process exiting, which is what makes fan-out
+  usable from a headless `claude -p` session.
+- **Claude Code task notification.** Without sc, the runner is launched as a background Bash
+  task and Agent-tool subagents run in the background; Claude Code wakes the session when each
+  finishes. This needs a persistent interactive session.
+
+A headless session with neither keeps every dispatch in-turn. Long workers must go out of turn
+either way: a foreground Bash call is killed at 10 minutes, and max-effort coders routinely run
+for an hour.
 
 Runtime state belongs to the user and project, not the plugin:
 
@@ -221,7 +245,7 @@ Autopilot — observational results from real work, not a controlled benchmark:
 ## Install
 
 Requires a current Claude Code release with plugin user configuration, agent
-`model`/`effort` frontmatter, `best`, and `fallbackModel` support.
+`model`/`effort` frontmatter, the `opus` and `fable` aliases, and `fallbackModel` support.
 
 From Claude Code, add this repository as a marketplace and install the plugin:
 
@@ -239,10 +263,10 @@ Then run:
 Setup is explicit-only. It first inspects the current configuration, then presents one plan
 and waits for approval before writing. It can:
 
-- Merge `model: "best"` and a fallback alias list into user settings without replacing
-  unrelated keys.
+- Merge `model: "opus"` and a fallback alias list into user settings without replacing
+  unrelated keys. It advises against `best`, which resolves to Fable 5.1 on current builds.
 - Extend an existing `availableModels` allowlist; it never creates an allowlist.
-- Install a user-level haiku/low Explore override. User level is required because a plugin
+- Install a user-level haiku Explore override. User level is required because a plugin
   agent cannot shadow the built-in Explore agent.
 - Create the runtime skeleton and install the worker runner.
 
@@ -269,6 +293,18 @@ Workers are JSON records validated by
 The shipped files in [`workers/presets/`](workers/presets/) are editable examples. Adding a
 worker does not require changing the plugin.
 
+| Preset | Model / effort | Use | Timeout |
+|---|---|---|---|
+| `gpt-6-astra-design-cli` | GPT-6 Astra / medium, read-only | Design phase: a second design opinion from another family | 3600s |
+| `gpt-6-luna-max-cli` | GPT-6 Luna / max | Cheap coding with long turns from a fully specified brief | 7200s |
+| `grok-4.7-review-cli` | Grok 4.7 / high, read-only | Third-family review | 3600s |
+| `grok-4.7-fix-cli` | Grok 4.7 / high | Fixing verified findings | 3600s |
+| `opencode-cli` | opencode default | Cheap bulk execution | 1800s |
+| `omp-cli` | omp's configured model | Cheap bulk execution | 1800s |
+
+Timeouts come from observed run lengths: Luna at max effort has finished runs near an hour,
+and Grok 4.7 review runs reach about half an hour. The runner accepts up to 14400s.
+
 A CLI dispatch uses:
 
 ```bash
@@ -287,12 +323,12 @@ or security engineer for security work.
 
 ### Codex compatibility
 
-Codex works as an external `cli` worker ([`codex-cli.json`](workers/presets/codex-cli.json)
-and the `gpt-5.6-*` presets): the brief is delivered over stdin to `codex exec`, the runner
-enforces the timeout and emits the completion callback on every exit path, and its
-review-capable records make it the preferred independent family for the adversarial panel.
-Codex records stay `trusted: false`, so the resolved command requires approval, and they
-are marked avoid-when for security-sensitive and visual work.
+Codex works as an external `cli` worker (the `gpt-6-*` presets): the brief is delivered over
+stdin to `codex exec`, the record pins the model, reasoning effort, and sandbox (`read-only`
+for design, `workspace-write` for coding), and the runner enforces the timeout and emits the
+completion callback on every exit path. Codex records stay `trusted: false`, so the resolved
+command requires approval, and they are marked avoid-when for security-sensitive and visual
+work.
 
 One wrapper caveat applies to the provider binaries, not to the
 [sc integration](#better-with-superengineering): in super.engineering-managed sessions the
@@ -334,8 +370,11 @@ in the run, which is why the record is marked avoid-when for security-sensitive 
 Autopilot includes optional fail-open hooks. `advisory` is the default:
 
 - The Bash guard recognizes a deliberately small set of catastrophic commands. Strict mode
-  blocks only a positive match; advisory mode warns.
-- The Stop hook reminds the session about its active/open ledger rows.
+  denies a positive match; advisory mode turns it into a permission prompt with the reason, so
+  a person sees it before it runs.
+- The Stop hook shows a message when the ledger still has active/open rows. The shipped
+  ledger has no session column, so every such row counts. Only when this session's id appears
+  in the ledger does it narrow to the rows carrying that id.
 - Any hook parsing, runtime, or platform error allows the operation. A broken hook must not
   brick Bash or trap a session.
 

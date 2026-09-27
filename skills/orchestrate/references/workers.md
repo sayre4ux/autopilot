@@ -76,6 +76,13 @@ not a licence to skip the `.gitignore` step, which still protects them from `git
 repository toplevel; behavior in a subdirectory of an enclosing repo is undefined — document
 the monorepo case if it arises.
 
+`timeoutSec` accepts up to 14400. Shipped presets set it from observed run lengths: the
+long-turn coder `gpt-6-luna-max-cli` has finished runs near 3600s and gets 7200; Grok 4.7
+review and fix runs finished within about 1700s but one review was killed at its old 1800s
+cap, so its true ceiling is unknown and 3600 is a margin over a censored maximum. Pass the record's timeout through; a
+foreground Bash call that cannot hold the run is a reason to go out of turn, not to cut the
+timeout.
+
 Runner exits:
 
 - `0`: success (`run`: allowed worker exit and expected output; `reset`: completed).
@@ -132,10 +139,13 @@ should be aware that `autopilot-worker reset` executes directly. The subcommand 
   `capabilities.queue: true`, and a launch that does not is an sc failure. This replaces the Agent-tool vehicle for
   native roles only; registry `cli` and `mcp` records dispatch unchanged. Any sc failure
   falls through to the Agent tool with the same brief — native agents stay the floor.
-- CLI: invoke the installed runner.
+- CLI: invoke the installed runner — in the foreground only when the run fits under the Bash
+  tool's 10-minute ceiling, otherwise with `--detach --callback` (sc address resolved) or as a
+  Bash `run_in_background` task (persistent session), per `dispatch.md`.
 - Subagent: the record's `subagentType` must name a plugin role as
-  `autopilot:architect`, `autopilot:engineer`, `autopilot:engineer-doc`,
-  `autopilot:security-engineer`, `autopilot:verifier`, or `autopilot:reviewer`; pass that
+  `autopilot:architect`, `autopilot:engineer`, `autopilot:senior-engineer`,
+  `autopilot:engineer-doc`, `autopilot:security-engineer`, `autopilot:verifier`,
+  `autopilot:reviewer`, or `autopilot:supervisor`; pass that
   exact value to the Agent tool as `subagent_type`, applying overlay-resolved model/effort
   overrides.
 - MCP: resolve placeholders recursively in `argsTemplate`, call `tool`, and extract
@@ -143,11 +153,13 @@ should be aware that `autopilot-worker reset` executes directly. The subcommand 
 
 Normalize all paths to `{ outcome, artifacts[], exit, evidence }`.
 
-Wake responsibility differs by path. Agent-tool and MCP dispatch are synchronous — the tool
-return is the ping. CLI dispatch takes `--callback`, and `--detach` when fanning out. The sc
-path carries the callback instruction inside the brief. Claude Code's own cross-session
-messaging socket is a candidate fifth path but is not yet a verified wake — `dispatch.md`
-states the conditions. See the callback section of `dispatch.md`; no path may end a turn with
+Wake responsibility differs by path. MCP dispatch returns inline. Agent-tool subagents run in
+the background and Claude Code notifies the session when each finishes. CLI dispatch takes
+`--callback`, and `--detach` when fanning out, when an sc address resolved; without one, a
+Bash `run_in_background` launch lets Claude Code notify the session when the runner exits,
+which holds only while the session's process persists. The sc path carries the callback
+instruction inside the brief. Claude Code's cross-session messaging socket is not a verified
+wake — `dispatch.md` states the conditions. See the callback section of `dispatch.md`; no path may end a turn with
 work running and no wake signal.
 
 ## Intake and escalation

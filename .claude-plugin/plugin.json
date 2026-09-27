@@ -1,7 +1,7 @@
 {
   "name": "autopilot",
   "displayName": "Autopilot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multi-agent orchestrator harness for Claude Code: command loop, ledger, dispatch protocol, review cycle, model-economics, and a registry-driven external-worker layer.",
   "author": {
     "name": "Autopilot Contributors"
@@ -18,17 +18,19 @@
   "agents": [
     "./agents/architect.md",
     "./agents/engineer.md",
+    "./agents/senior-engineer.md",
     "./agents/engineer-doc.md",
     "./agents/security-engineer.md",
     "./agents/verifier.md",
-    "./agents/reviewer.md"
+    "./agents/reviewer.md",
+    "./agents/supervisor.md"
   ],
   "userConfig": {
     "enforcement": {
       "type": "string",
       "title": "Enforcement mode",
       "default": "advisory",
-      "description": "Enforcement-hook posture. off = no hooks fire; advisory = warn only; strict = block catastrophic Bash commands."
+      "description": "Enforcement-hook posture. off = no hooks fire; advisory = ask before catastrophic Bash commands; strict = deny them."
     }
   }
 }

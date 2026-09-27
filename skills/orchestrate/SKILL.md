@@ -29,9 +29,11 @@ files in this skill as executable doctrine; do not improvise past a relevant rub
 8. The orchestrator is a lean dispatcher, not a worker. Push heavy reading and file context
    into dispatches so the driving session stays small; never let it balloon into the work.
 9. Never idle waiting and never leave work running with no wake signal. Every dispatch either
-   returns inline or pings back to the callback address resolved at startup. Fan-out
-   dispatches detached, marks its rows `awaiting`, and ends the turn; if no callback address
-   resolved, dispatch synchronously instead. A vehicle whose wake is not listed in
+   returns inline or wakes the session when it finishes — through the sc callback address
+   resolved at startup, or through Claude Code's own task notification for a background Bash
+   command or subagent in a persistent session. Fan-out goes out of turn, marks its rows
+   `awaiting`, and ends the turn; in a headless session with no sc address, dispatch in-turn
+   instead. A vehicle whose wake is not listed in
    `references/dispatch.md` counts as no wake signal, and a sender-side `delivered`/`notified`
    flag is not a wake — block on the work or record its poll command in the row instead of
    promising a resumption you have not verified. See the callback section of
@@ -47,7 +49,7 @@ the whole accumulated context, and cache reads still count. Keep the orchestrato
 - Reconcile the ledger and close out rather than idling a session for hours. Resume from the
   ledger (Hard rule 5), never by keeping a driver alive or reloading a 150k-plus transcript.
 - Match model tier to task tier. Reserve the top tier for work that genuinely needs it;
-  routine dispatches take the standard coding/effort tiers in `references/workers.md`.
+  routine dispatches take the effort policy in `references/roles.md`.
 - Delegation buys isolation, parallelism, or scale, never ritual (Hard rule 1). Over-
   orchestrating a medium task pays subagent context load for no return; work it directly.
 
@@ -61,8 +63,10 @@ Never auto-invoke for documents, decks, visuals, or prose regardless of size. Ex
 invocation may orchestrate those and routes implementation to `engineer-doc`.
 
 Auto-entry is skill invocation, not dispatch authorization, and the restriction is no longer
-Agent-tool-only. Claude Code injects a system-prompt line confining Agent-tool calls to
-explicitly requested delegation, and `sc instructions orchestration` independently states
+Agent-tool-only. Claude Code has injected a system-prompt line confining Agent-tool calls to
+explicitly requested delegation (present at 2.1.241; not observed in an interactive 2.1.283
+session on 2026-09-27, so check this session's system prompt rather than assuming either
+way), and `sc instructions orchestration` independently states
 that delegation language never authorizes `sc agent|agents|team|layout` and that delegation
 must not be inferred from task size — see Degraded mode. On an auto-entered job the user
 asked for the work and never asked for agents, so both vehicles are suppressed and only
@@ -89,9 +93,15 @@ and dispatching via the Agent tool by default is a harness failure, not a shortc
 In the same detection pass, resolve the callback address that lets finished workers wake this
 session: `sc agents get --to "id:chat:$SUPERCONDUCTOR_TERMINAL_ID" --output json`, usable only
 when the read succeeds with `capabilities.send` and `capabilities.queue` true. Record it in
-the ledger header as `Callback: chat:<terminal-id>`; on failure record `Callback: none` and
-keep every dispatch synchronous. This matters most when the session is headless (`claude -p`):
-the process exits at turn end, so a queued callback is the only thing that restarts it.
+the ledger header as `Callback: chat:<terminal-id>`. On failure record `Callback: none`: a
+persistent interactive session still has Claude Code's task notification for background Bash
+commands and subagents, so record `Callback: none (harness notification)` there. A headless
+session (`claude -p`) has neither — its process exits at turn end, so only a queued sc
+callback restarts it — and keeps every dispatch in-turn.
+
+Check which model this session runs on. If it is Fable and the job includes security-sensitive
+work, say so to the user and recommend restarting the job on `opus` before any
+`security-engineer` dispatch; see the Fable section of `references/roles.md`.
 
 If the codebase-memory MCP is available, use it as the primary code-discovery tool for
 this job. Before decomposition, ensure the target project is indexed: check `index_status`,
@@ -159,8 +169,11 @@ For native Agent-tool dispatch, use the exact namespaced `subagent_type` values 
 
 Pass `--callback <target>` to CLI workers whenever an address resolved, adding `--detach`
 when fanning out or when the worker will run for minutes; then end the turn rather than
-waiting. sc-managed role dispatches carry the `<callback>` block inside the brief. Agent-tool
-and MCP dispatches are synchronous and need nothing.
+waiting. With no sc address, launch the runner through Bash `run_in_background` whenever it may
+outlast the Bash tool's 10-minute foreground ceiling, and pass the record's own timeout rather
+than shrinking it to fit. sc-managed role dispatches carry the `<callback>` block inside the
+brief. Agent-tool subagents run in the background and notify on completion; MCP dispatches
+return inline.
 
 First external failure receives one retry with output and metadata attached. A second
 failure routes to native engineer, or security-engineer for security work. Record every
@@ -179,15 +192,17 @@ model alias is available, preserve role separation, reduce parallelism, strength
 and pass that alias explicitly to each native dispatch.
 
 Agent-tool dispatch has a suppression mode the other vehicles do not. Claude Code can carry a
-system-prompt line restricting Agent-tool calls to delegation the user asked for, and it
-outranks this skill and any `CLAUDE.md`. On an auto-entered job it can turn an intended
+system-prompt line restricting Agent-tool calls to delegation the user asked for, and when
+present it outranks this skill and any `CLAUDE.md`. Whether it is present varies by build and
+session; read the system prompt instead of assuming. On an auto-entered job it can turn an intended
 dispatch into silent inline work. Log `Vehicle: agent-tool (suppressible)` when the job both
 degraded to the Agent tool and auto-entered, so a dispatch that never fired reads differently
 from one that was never planned. Two suppressed dispatches count as the two failures in Hard
 rule 1 — fall through to a registry worker, or state the delegation to the user and let them
 authorize it, rather than restating the policy louder.
 
-An unresolvable callback address is a degradation, not a failure: log `Callback: none`, drop
-`--detach`, and run every dispatch synchronously in-turn. A delivered-false callback in
+An unresolvable callback address is a degradation, not a failure: log `Callback: none` and
+drop `--detach`. In a persistent session, long work still goes out of turn as harness
+background tasks; in a headless one, run every dispatch in-turn. A delivered-false callback in
 `meta.json` means that task's wake was lost — reconcile it by reading the artifacts directly
 rather than waiting for a ping that will not come.

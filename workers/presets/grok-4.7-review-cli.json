@@ -1,0 +1,44 @@
+{
+  "id": "grok-4.7-review-cli",
+  "type": "cli",
+  "displayName": "Grok 4.7 via Grok CLI (xai — reviewer, high, read-only sandbox)",
+  "capabilities": [
+    "review"
+  ],
+  "modelFamily": "xai-grok",
+  "preferWhen": "Independent review from a third model family, including security review the user asked for.",
+  "avoidWhen": "Writing code; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "grok",
+    "args": [
+      "--prompt-file",
+      "${brief_path}",
+      "--cwd",
+      "${workdir}",
+      "-m",
+      "grok-4.7",
+      "--reasoning-effort",
+      "high",
+      "--sandbox",
+      "read-only",
+      "--always-approve",
+      "--disable-web-search",
+      "--output-format",
+      "plain",
+      "--verbatim"
+    ],
+    "promptDelivery": "file",
+    "cwd": "${workdir}",
+    "env": {},
+    "timeoutSec": 3600,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}

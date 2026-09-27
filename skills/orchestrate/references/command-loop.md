@@ -75,8 +75,12 @@ callback into a cold process — the ledger, not conversation memory, is authori
 Break the end-state into independently verifiable components. Write acceptance criteria
 before method; split components whose criteria remain vague. Mark dependencies and run
 independent work in parallel. Assign design to architect, code/data implementation to
-engineer, document/visual implementation to engineer-doc, and security-sensitive work to
-security-engineer. Split design plus implementation into sequential tasks.
+engineer, code where a defect is expensive to senior-engineer, document/visual implementation
+to engineer-doc, and security-sensitive work to security-engineer. Split design plus
+implementation into sequential tasks.
+
+A multi-component or multi-day plan goes to the supervisor's plan gate (R8 in `judgment.md`)
+before the first dispatch.
 
 Every changed page/slide in a visual deliverable must be rendered to an image and visually
 inspected. Text-presence checks do not satisfy that criterion.
@@ -100,16 +104,17 @@ fill the matching template in `dispatch.md`. External and native workers receive
 redlines, and all required materials. Long specifications remain files.
 
 Then choose how the result comes back, per the callback section of `dispatch.md`. One short
-dispatch runs synchronously. A fan-out of two or more workers, or any worker expected to take
-minutes, dispatches with a callback — `--detach --callback` for CLI workers, the brief's
-`<callback>` block for sc agents — sets each row to `awaiting`, and ends the turn. Never poll
-and never idle the session; equally, never detach work when no callback address resolved,
-because an unwakeable session loses the result entirely.
+dispatch runs in-turn. A fan-out of two or more workers, or any worker expected to take
+minutes, goes out of turn with a wake — `--detach --callback` for CLI workers when an sc
+address resolved, a Bash `run_in_background` launch of the runner otherwise, the brief's
+`<callback>` block for sc agents, a background subagent for the Agent tool — sets each row to
+`awaiting`, and ends the turn. Never poll and never idle the session; equally, never send work
+out of turn in a headless session with no sc address, because nothing will wake it.
 
 ## 6a — Wake
 
-A callback re-enters here, possibly in a cold process. Reconcile the ledger before anything
-else, then run step 7 for the announced task id alone. Leave other `awaiting` rows awaiting
+A callback or harness task notification re-enters here, possibly in a cold process.
+Reconcile the ledger before anything else, then run step 7 for the announced task id alone. Leave other `awaiting` rows awaiting
 and end the turn again — the final callback is the one that reaches close-out. For a row that
 has gone quiet past its expected duration, probe rather than guess: `kill -0 <pid>` from its
 `.pending.json` for a CLI worker, `sc agent wait --idle` for an sc agent. A dead process with
@@ -134,11 +139,13 @@ review cycle here.
 ## 8 — Zoom out
 
 Ask whether the deliverable invalidated or made another component redundant, exposed more
-urgent work, or needs a ledger update. The orchestrator owns aggregate consistency.
+urgent work, or needs a ledger update. The orchestrator owns aggregate consistency. When a wave
+of work completes on a multi-component job, run the supervisor's milestone gate (R8).
 
 ## 9 — Close out
 
-Report conclusion first, then paths and evidence. Record a new lesson only when no existing
+Run the supervisor's final gate first when R8 calls for it. Report conclusion first, then
+paths and evidence. Record a new lesson only when no existing
 lesson covers it; otherwise increase its hit count. Reconcile every active/open/awaiting row
 owned by this session — close out only when none remain awaiting — and run the housekeeping
 thresholds in `maintenance.md`.
@@ -156,8 +163,8 @@ rewrite the State header to current facts. Ledger Notes then carry pointers
 2 Review   off / final / per-component
 3 Route    ask-first / delegate / model-or-worker
 4 Ticket   ledger before action
-5 Split    criteria first; parallelize independents
-6 Dispatch self-contained identical brief; sync or callback+detach, then end the turn
+5 Split    criteria first; parallelize independents; supervisor plan gate (R8)
+6 Dispatch self-contained identical brief; in-turn, or out of turn with a wake, then end the turn
 6a Wake   reconcile ledger / intake the announced task only
 7 Intake   spot-check / red-team / sign-off / verifier per R7
 8 Zoom out aggregate consistency

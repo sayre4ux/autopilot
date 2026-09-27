@@ -1,0 +1,46 @@
+{
+  "id": "grok-4.7-fix-cli",
+  "type": "cli",
+  "displayName": "Grok 4.7 via Grok CLI (xai — fixer, high, workspace sandbox)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test"
+  ],
+  "modelFamily": "xai-grok",
+  "preferWhen": "Fixing verified findings from a fully specified brief, or a parallel second implementation from a third model family.",
+  "avoidWhen": "Design decisions the brief leaves open; security-sensitive work unless the user asked for Grok; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "grok",
+    "args": [
+      "--prompt-file",
+      "${brief_path}",
+      "--cwd",
+      "${workdir}",
+      "-m",
+      "grok-4.7",
+      "--reasoning-effort",
+      "high",
+      "--sandbox",
+      "workspace",
+      "--always-approve",
+      "--disable-web-search",
+      "--output-format",
+      "plain",
+      "--verbatim"
+    ],
+    "promptDelivery": "file",
+    "cwd": "${workdir}",
+    "env": {},
+    "timeoutSec": 3600,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}

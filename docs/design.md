@@ -3,7 +3,7 @@
 ## Purpose
 
 Autopilot packages a complete orchestration process as one Claude Code plugin. It provides
-an auto-invokable orchestration skill, explicit-only setup skill, six native roles, optional
+an auto-invokable orchestration skill, explicit-only setup skill, eight native roles, optional
 enforcement hooks, and a registry-driven worker layer. User and project configuration stays
 outside the installed plugin.
 
@@ -39,14 +39,18 @@ for approval, backs up user settings once, and applies only approved key/file ch
 | Agent | Alias / effort | Boundary |
 |---|---|---|
 | architect | opus / high | Designs and arbitrates; no production code |
-| engineer | opus / high | Code, scripts, data |
-| engineer-doc | opus / high | Visual/doc work with render inspection |
-| security-engineer | opus / xhigh | Security-sensitive work |
-| verifier | opus / xhigh | Refutes or confirms; never fixes |
-| reviewer | opus / xhigh | Adversarial severity findings; never fixes |
+| engineer | opus / medium | Normal code, scripts, data |
+| senior-engineer | opus / high | Code where a defect is expensive |
+| engineer-doc | opus / medium | Visual/doc work with render inspection |
+| security-engineer | opus / high | Security-sensitive work |
+| verifier | opus / high | Refutes or confirms; never fixes |
+| reviewer | opus / high | Adversarial severity findings; never fixes |
+| supervisor | fable / high | Judges the job at gates; never edits or dispatches |
 
-Global and project overlays can override these values per Agent call. Model identifiers
-remain aliases.
+Efforts are tuned for Opus 5.5, whose `medium` does roughly what Opus 5 did at `high`.
+`engineer` and `senior-engineer` are separate definitions because the Agent tool has no
+per-call effort. Global and project overlays can override the model per Agent call; effort
+overrides take effect on the sc path. Model identifiers remain aliases.
 
 ### Worker registry
 
@@ -85,15 +89,18 @@ emits the ping when that process ends. For CLI workers that is the runner, which
 every exit path and records `callback: { target, idempotencyKey, delivered, error }` in
 metadata; `--detach` re-execs the runner in its own session so the dispatching turn can end
 while the worker runs. For sc-managed role agents there is no wrapper, so the brief carries
-the send command as a mandatory final action with `sc agent wait` as fallback. Agent-tool and
-MCP dispatch need nothing — the tool return is the ping.
+the send command as a mandatory final action with `sc agent wait` as fallback. MCP dispatch
+returns inline. Agent-tool subagents run in the background, and Claude Code's own task
+notification wakes the session when each finishes; the same notification covers a runner
+launched with Bash `run_in_background` when no sc address resolved.
 
 The design point is that the guarantee lives in the wrapper, not in the worker's goodwill:
 Claude, Codex, and Grok are all covered identically because none of them is trusted to
 remember. It exists because the driving session is often headless (`claude -p`), where the
-process exits at turn end and a queued callback is the only thing that restarts it. Without a
-resolved callback address the harness stays fully synchronous, which is the older behavior and
-always correct.
+process exits at turn end and a queued callback is the only thing that restarts it. Claude
+Code's task notification needs a live process, so it serves persistent interactive sessions
+only. A headless session without a resolved callback address stays fully in-turn, which is the
+older behavior and always correct.
 
 ### Intake
 
@@ -115,7 +122,7 @@ round three escalates to architect arbitration.
 ### Hooks
 
 The Bash guard is fail-closed only for a positive catastrophic-pattern match in strict mode.
-Advisory mode emits the same warning without blocking. The ledger nudge is advisory. Both
+Advisory mode turns the same match into a permission prompt, so a person decides. The ledger nudge is advisory. Both
 catch all internal errors and return success so a parsing or platform defect cannot break
 normal host behavior.
 

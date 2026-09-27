@@ -2,53 +2,52 @@
   // Autopilot user overlay. Copy to ~/.autopilot/config.jsonc (global) or
   // <project>/.autopilot/config.jsonc (project). Every key is optional; absent = shipped default.
 
-  // Per-role overrides. Aliases only (opus/sonnet/haiku) — never dated model ids.
-  // Effort policy: every delegated role runs at high or above — a subagent gets one shot
-  // with no interactive correction — and xhigh is reserved for the adversarial roles
-  // (security-engineer, verifier). Effort no longer branches on model generation; the
-  // retired 4.8/4.6 lift-and-clamp rule is documented as legacy in roles.md.
+  // Per-role overrides. Aliases only (opus/fable/sonnet/haiku) — never dated model ids.
+  // Effort policy (Opus 5.5): medium for one-shot work where a routine defect is caught at
+  // intake (engineer, engineer-doc); high where a miss is expensive or propagates (architect,
+  // senior-engineer, security-engineer, verifier, reviewer). xhigh/max only behind an eval.
+  // The supervisor runs on fable at high and is called at gates only (R8 in judgment.md).
   // effort is a subagent frontmatter field (values low|medium|high|xhigh|max, model-
   // dependent) that overrides the session effort while the agent runs. The Agent tool has no
   // per-call effort argument, so these values land via the definition or sc --reasoning,
   // not an Agent-tool call.
   "roles": {
-    "architect":         { "model": "opus",   "effort": "high"  },
-    "engineer":          { "model": "opus",   "effort": "high"  },
-    "engineer-doc":      { "model": "opus",   "effort": "high"  },
-    "security-engineer": { "model": "opus",   "effort": "xhigh" },
-    "verifier":          { "model": "opus",   "effort": "xhigh" },
-    "reviewer":          { "model": "opus",   "effort": "high"  }
+    "architect":         { "model": "opus",  "effort": "high"   },
+    "engineer":          { "model": "opus",  "effort": "medium" },
+    "senior-engineer":   { "model": "opus",  "effort": "high"   },
+    "engineer-doc":      { "model": "opus",  "effort": "medium" },
+    "security-engineer": { "model": "opus",  "effort": "high"   },
+    "verifier":          { "model": "opus",  "effort": "high"   },
+    "reviewer":          { "model": "opus",  "effort": "high"   },
+    "supervisor":        { "model": "fable", "effort": "high"   }
   },
 
   // Review cycle default when a job doesn't specify one. off | final | per-component.
   "reviewDefault": "off",
 
   // Worker layer preferences. Order = tie-break priority; false disables.
-  // GPT-5.6 personas: Sol = deep thinker at high reasoning effort (hardest diagnosis,
-  // thorny reasoning, code review); Luna = the coding workhorse at two effort tiers —
-  // xhigh for quality coding (design-bearing / correctness-critical implementation) and
-  // high for normal coding (well-scoped features, fixes, routine refactors and tests).
-  // Grok 4.5 = independent third-family cross-check. Ultra (separate multi-agent topology)
-  // is not wired here.
+  // GPT-6 via Codex: Astra at medium effort for the design phase only (read-only, a second
+  // design opinion from another family); Luna at max effort for cheap coding with long turns
+  // (runs past an hour are normal). Grok 4.7 = independent third-family review, plus a fixer
+  // for verified findings. Normal coding stays on the native engineer.
   "workerPreferences": {
-    "gpt-5.6-luna-xhigh-cli": true,
-    "gpt-5.6-sol-cli":        true,
-    "grok-cli":               true,
-    "codex-cli":              true,
-    "gpt-5.6-luna-high-cli":  true,
+    "gpt-6-astra-design-cli": true,
+    "gpt-6-luna-max-cli":     true,
+    "grok-4.7-review-cli":    true,
+    "grok-4.7-fix-cli":       true,
     "opencode-cli":           true,
     // omp runs on whatever model omp itself is configured for, so it sits last: cheap bulk
     // execution, and never counted on for family independence.
     "omp-cli":                true,
-    "order": ["gpt-5.6-luna-xhigh-cli", "gpt-5.6-sol-cli", "grok-cli", "codex-cli", "gpt-5.6-luna-high-cli", "opencode-cli", "omp-cli"]
+    "order": ["gpt-6-astra-design-cli", "gpt-6-luna-max-cli", "grok-4.7-review-cli", "grok-4.7-fix-cli", "opencode-cli", "omp-cli"]
   },
 
   // Where setup installed the runner (setup writes this; edit only if you moved it).
   "workerRunner": "~/.autopilot/bin/autopilot-worker",
 
-  // Completion callbacks: finished workers ping back and wake the dispatching session, so a
-  // fan-out can end its turn instead of idling. "auto" uses them whenever an sc callback
-  // address resolves; "off" forces every dispatch to run synchronously in-turn.
+  // Completion wakes: finished workers wake the dispatching session, so a fan-out can end its
+  // turn instead of idling. "auto" uses an sc callback when one resolves and Claude Code's
+  // background-task notification otherwise; "off" forces every dispatch to run in-turn.
   // detachThresholdSec: a single worker expected to run longer than this is detached rather
   // than waited on; any fan-out of two or more is detached regardless.
   "callbacks": {

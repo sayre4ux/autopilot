@@ -1,4 +1,4 @@
-"""Smoke tests for the PreToolUse Bash guard: it blocks only in strict mode, and fails open."""
+"""Smoke tests for the PreToolUse Bash guard: strict denies, advisory asks, and it fails open."""
 
 import json
 import subprocess
@@ -24,38 +24,63 @@ def payload(command):
     return json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
 
 
+def decision(result):
+    """The permission decision the guard emitted, or None when it stayed silent."""
+    if not result.stdout.strip():
+        return None
+    output = json.loads(result.stdout)["hookSpecificOutput"]
+    assert output["hookEventName"] == "PreToolUse"
+    assert output["permissionDecisionReason"].startswith("Autopilot Bash guard")
+    return output["permissionDecision"]
+
+
 CATASTROPHIC = [
     "rm -rf /",
+    "rm -rf /*",
+    "rm -rf ~/",
+    'rm -rf "$HOME"',
+    "sudo rm -rf /",
+    "cd /tmp && rm -fr ${HOME}/*",
+    "FOO=1 rm -rf /",
+    "env LANG=C rm -rf ~",
+    "echo hi\nrm -rf /",
     "git push --force origin main",
     "git commit --no-verify -m wip",
     "psql -c 'DROP TABLE users'",
 ]
 
 
-def test_strict_blocks_catastrophic_commands():
+def test_strict_denies_catastrophic_commands():
     for command in CATASTROPHIC:
         result = run_guard(payload(command), mode="strict")
-        assert result.returncode == 2, f"{command!r} was not blocked: {result.stderr}"
-        assert "Autopilot Bash guard" in result.stderr
+        assert result.returncode == 0
+        assert decision(result) == "deny", f"{command!r} was not denied: {result.stdout}"
 
 
-def test_advisory_warns_without_blocking():
-    result = run_guard(payload("rm -rf /"), mode="advisory")
-    assert result.returncode == 0
-    assert "Autopilot Bash guard" in result.stderr
+def test_advisory_asks_the_user():
+    for command in CATASTROPHIC:
+        result = run_guard(payload(command), mode="advisory")
+        assert result.returncode == 0
+        assert decision(result) == "ask", f"{command!r} was not escalated: {result.stdout}"
 
 
 def test_off_mode_is_silent():
     result = run_guard(payload("rm -rf /"), mode="off")
     assert result.returncode == 0
-    assert result.stderr == ""
+    assert result.stdout == ""
 
 
 def test_benign_commands_pass_in_strict_mode():
-    for command in ["ls -la", "rm -rf ./build", "git push origin feature/x", "npm test"]:
+    for command in [
+        "ls -la",
+        "rm -rf ./build",
+        "rm -rf ~/Projects/app/build",
+        "git push origin feature/x",
+        "npm test",
+    ]:
         result = run_guard(payload(command), mode="strict")
-        assert result.returncode == 0, f"{command!r} was blocked: {result.stderr}"
-        assert result.stderr == ""
+        assert result.returncode == 0
+        assert decision(result) is None, f"{command!r} was flagged: {result.stdout}"
 
 
 def test_fails_open_on_malformed_input(tmp_path):
@@ -72,3 +97,4 @@ def test_fails_open_with_no_mode_flag_and_empty_home(tmp_path):
     # No --mode, no config file: the default is advisory, so nothing blocks.
     result = run_guard(payload("rm -rf /"), home=home)
     assert result.returncode == 0
+    assert decision(result) == "ask"

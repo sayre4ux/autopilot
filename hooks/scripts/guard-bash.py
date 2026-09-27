@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Fail-open Claude Code hook for a small set of catastrophic Bash commands."""
+"""Fail-open Claude Code hook for a small set of catastrophic Bash commands.
+
+Strict mode denies the call; advisory mode asks the user. Both go out as a PreToolUse
+permission decision on stdout, because exit-0 stderr is never shown to the model.
+"""
 
 from __future__ import annotations
 
@@ -48,7 +52,7 @@ def _command_from(payload: Any) -> str:
 def _catastrophic_reason(command: str) -> str | None:
     normalized = " ".join(command.strip().split())
 
-    if _rm_recursive_force_root_or_home(normalized):
+    if any(_rm_recursive_force_root_or_home(line) for line in command.splitlines()):
         return "recursive forced removal of / or ~"
 
     if (
@@ -70,7 +74,15 @@ def _catastrophic_reason(command: str) -> str | None:
     return None
 
 
+def _root_or_home_targets() -> set[str]:
+    targets = {"/", "/*"}
+    for home in ("~", "$HOME", "${HOME}", str(Path.home())):
+        targets |= {home, f"{home}/", f"{home}/*"}
+    return targets
+
+
 def _rm_recursive_force_root_or_home(command: str) -> bool:
+    targets = _root_or_home_targets()
     for segment in re.split(r"\s*(?:&&|\|\||[;&|])\s*", command):
         if not segment:
             continue
@@ -78,6 +90,11 @@ def _rm_recursive_force_root_or_home(command: str) -> bool:
             tokens = shlex.split(segment)
         except ValueError:
             tokens = segment.split()
+        while tokens and (
+            tokens[0] in {"sudo", "command", "builtin", "env"}
+            or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[0])
+        ):
+            tokens = tokens[1:]
         if not tokens or tokens[0].lower() != "rm":
             continue
 
@@ -97,7 +114,7 @@ def _rm_recursive_force_root_or_home(command: str) -> bool:
                 recursive = recursive or "r" in flags
                 forced = forced or "f" in flags
                 continue
-            if recursive and forced and token in {"/", "~"}:
+            if recursive and forced and token in targets:
                 return True
     return False
 
@@ -116,8 +133,17 @@ def main() -> int:
         if reason is None:
             return 0
 
-        print(f"Autopilot Bash guard: {reason}.", file=sys.stderr)
-        return 2 if mode == "strict" else 0
+        # Exit-0 stderr never reaches the model, so the verdict goes out as a permission
+        # decision: strict denies the call, advisory puts it in front of the user.
+        decision = {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny" if mode == "strict" else "ask",
+                "permissionDecisionReason": f"Autopilot Bash guard: {reason}.",
+            }
+        }
+        print(json.dumps(decision))
+        return 0
     except BaseException:
         # Hooks must never brick Bash because of malformed input or a script/platform bug.
         return 0

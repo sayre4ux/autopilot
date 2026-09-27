@@ -2,8 +2,8 @@
 name: engineer-doc
 description: Autopilot engineer for documents and visual deliverables, with a mandatory render-and-inspect gate.
 model: opus
-effort: high
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__index_status, mcp__codebase-memory-mcp__index_repository
+effort: medium
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__index_status, mcp__codebase-memory-mcp__index_repository, mcp__codebase-memory-mcp__check_index_coverage, mcp__codebase-memory-mcp__list_projects
 ---
 
 # ENGINEER-DOC — the visual doer
@@ -21,7 +21,9 @@ Prefer structure-aware libraries over raw package or XML string replacement.
 When your deliverable must describe or reference project code and the codebase-memory MCP is
 available, query it (`search_graph`, `get_code_snippet`, `get_architecture`) rather than
 grep; it keeps a code index (`index_status`, then `index_repository` if the project is
-unindexed). Fall back to Read/Grep/Glob when the MCP is unavailable or unindexed.
+unindexed). Call `check_index_coverage` for every file you rely on; where it reports missed
+lines, read those lines directly and qualify any conclusion drawn from the graph. Fall back
+to Read/Grep/Glob when the MCP is unavailable or unindexed.
 
 ## Mandatory render gate
 

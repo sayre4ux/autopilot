@@ -6,7 +6,7 @@ Every native or external worker receives this self-contained shape:
 
 ```xml
 <dispatch>
-  <to>architect | engineer | engineer-doc | security-engineer | external worker id</to>
+  <to>architect | engineer | senior-engineer | engineer-doc | security-engineer | supervisor | external worker id</to>
   <task_id>T-001</task_id>
   <depends_on>none | T-###</depends_on>
   <domain>code | document | analysis | design | research</domain>
@@ -20,7 +20,8 @@ Every native or external worker receives this self-contained shape:
   <redlines>Files, actions, or decisions that must not change.</redlines>
   <materials>All specifications, fixtures, and upstream outputs by readable path.</materials>
   <callback>Present only when the vehicle needs the agent to ping back; see the callback
-  section. Omitted for Agent-tool and MCP dispatch, where the tool return is the ping.</callback>
+  section. Omitted for Agent-tool dispatch, where Claude Code's task notification is the wake,
+  and for MCP dispatch, which returns inline.</callback>
 </dispatch>
 ```
 
@@ -66,9 +67,17 @@ Source every factual or numeric claim.
 
 The orchestrator never idles while workers run. Every dispatch vehicle *in the table below*
 either returns its result inline or pings back and wakes the dispatching session when it
-finishes. This matters most when the session is headless (`claude -p` under
-super.engineering): the turn ends, the process exits, and a queued callback message is the
-only thing that starts it again.
+finishes. There are two wake channels, and which one a job has decides how long work may run
+out of turn:
+
+- **sc callback** — a queued `sc agent send` to the orchestrator's own sc target. It survives
+  the orchestrator's process exiting between turns, so it is the only wake for a headless
+  session (`claude -p` under super.engineering), where the turn ends, the process exits, and a
+  queued message is the only thing that starts it again.
+- **Harness task notification** — Claude Code itself wakes the session when a background task
+  it started finishes: a Bash command run with `run_in_background`, or a background Agent-tool
+  subagent. It needs the orchestrator's process to still exist, so it holds for a persistent
+  interactive session and not for a headless one.
 
 A vehicle's own delivery flag is not a wake. `delivered: true`, `fan_in_notified: true`, or a
 successful send confirms that the notification left the sender — not that a session which has
@@ -89,9 +98,12 @@ sc agents get --to "id:chat:$SUPERCONDUCTOR_TERMINAL_ID" --output json
 Usable only when that read succeeds and reports `capabilities.send` and `capabilities.queue`
 both true. Record it in the ledger header as `Callback: chat:<terminal-id>`. Anything else —
 no `sc`, no `SUPERCONDUCTOR_TERMINAL_ID`, failed read, `send`/`queue` false — means there is
-no callback address: log the degradation and run every dispatch synchronously. Synchronous
-is the pre-callback behavior and is always correct, only slower. Never invent a target;
-`sc agents list --output json` shows the real ids.
+no sc callback address: log `Callback: none`. In a persistent interactive session the harness
+task notification is still available — record `Callback: none (harness notification)` and use
+it per the table below. In a headless session there is no wake at all: run every dispatch
+in-turn. In-turn is always correct, only slower — but a foreground Bash command is killed at the
+tool's 10-minute ceiling, so in-turn CLI dispatch is only for runs that fit under it. Never
+invent a target; `sc agents list --output json` shows the real ids.
 
 More than one app instance can be running, and a terminal id is only meaningful against the
 instance that owns it. `sc instance current --json` names the instance this session belongs
@@ -104,9 +116,10 @@ that reports success into a different app.
 
 | Vehicle | Wake mechanism |
 |---|---|
-| Agent tool (native roles) | The tool return is the ping. Verify per session rather than assuming: Claude Code 2.1.232 made non-teammate agent spawns in interactive sessions run in the background by default, where the call returns an agent id and the result arrives later as a task notification. A dispatch that returns an id instead of a report is background, not complete — treat the notification as the wake and never read the id as the result. |
+| Agent tool (native roles) | Background by default: the call returns an agent id and Claude Code's task notification is the wake (measured 2026-09-27 on 2.1.283). Verify per session rather than assuming: Claude Code 2.1.232 made non-teammate agent spawns in interactive sessions run in the background by default, where the call returns an agent id and the result arrives later as a task notification. A dispatch that returns an id instead of a report is background, not complete — treat the notification as the wake and never read the id as the result. |
 | Registry `mcp` worker | The tool return is the ping. Synchronous. |
-| Registry `cli` worker (codex, grok, gpt-*, opencode, omp) | The runner sends it, deterministically, on every exit path including timeout and registry error. |
+| Registry `cli` worker (codex, grok, gpt-*, opencode, omp) with an sc callback | The runner sends it, deterministically, on every exit path including timeout and registry error. |
+| Registry `cli` worker without an sc callback | Launch the runner with Bash `run_in_background`; the harness notifies the session when the process exits, on every exit path. Evidence, and its limits: runner metadata in two projects shows long runs finishing with `callback: null` (the longest 3588s), and a project ledger records launching the runner, or a lane script wrapping it, as a background Bash task with the harness notification as its wake — but no metadata records the wake itself. The directly measured wake is a background Agent-tool subagent (2026-09-27, 2.1.283), and Claude Code documents background Bash tasks as notifying the session on exit; confirm the first such wake in a job before fanning out more than one. Not a wake for a headless session, whose process is gone by the time the worker exits. Never shrink `--timeout` to fit a foreground call: about twenty foreground runs were killed at 540–570s by the Bash ceiling, well inside their records' timeouts. |
 | sc-managed role agent | The brief's mandatory final action sends it; `sc agent wait` remains the fallback. Launch the role with `--ui chat` — a terminal target parks in `review` after its turn, where an unqueued send reports success without running and reads return no content, which disables the fallback. |
 | `sc team run` fan-in | **No verified wake.** `--notify self` sets `fan_in_notified: true` once sc hands the completion to the registered creator, but a headless session that already ended its turn is not restarted by it (observed 2026-07-30, run `d927b26078e8`: both roles reported, notified true, no turn). Either block with `sc agent wait --to label:<role> --idle` before ending the turn, or write `Poll: sc team status --run <id>` into the row and read the roles' `report.result_file` on the next turn. A run that was nonterminal when the app restarted becomes Interrupted and is never resumed, so that poll can await a completion that will never arrive: treat an Interrupted status as a failed dispatch and re-dispatch. |
 | Native cross-session messaging (`SendMessage` / inbox socket) | **No wake for an sc-managed session.** Claude Code 2.1.224+ binds a per-session inbox socket and starts a new turn when an idle session receives a message, but an sc-managed session's process does not exist between turns: measured 2026-08-09, 75s after a turn ended the registry held no entry for that `sessionId` and there was no socket to post to. Counts as no wake signal here. Unresolved, not refuted, for an orchestrator whose process persists — see below. |
@@ -305,7 +318,7 @@ conversation memory:
 ```xml
 <autopilot-callback>
   <task_id>T-003</task_id>
-  <worker>codex-cli</worker>
+  <worker>gpt-6-luna-max-cli</worker>
   <status>success | failed | timeout | aborted | error</status>
   <exit>0</exit>
   <workdir>/abs/project</workdir>
@@ -323,22 +336,50 @@ once, and a retry of the same task still wakes it.
 
 ### Turn discipline
 
-- One short dispatch: run it synchronously. A callback buys nothing and costs a wake.
+- One short dispatch: run it in-turn. A callback buys nothing and costs a wake.
 - Fan-out of two or more workers, or any single worker expected to exceed the overlay's
-  `callbacks.detachThresholdSec` (default 120s): dispatch all of them detached, write an
-  `awaiting` ledger row per task recording the callback target and expected duration, then
+  `callbacks.detachThresholdSec` (default 120s): dispatch all of them out of turn — detached
+  with `--callback` when an sc address resolved, otherwise as harness background tasks — write
+  an `awaiting` ledger row per task recording the wake channel and expected duration, then
   **end the turn**. Do not poll, do not sleep, do not hold the session open waiting.
+- Any CLI worker that may outlast the Bash tool's 10-minute foreground ceiling goes out of turn
+  regardless of the threshold. Pass the record's own timeout; the shipped presets' timeouts
+  come from observed run lengths and long-turn workers routinely need an hour or more.
 - `callbacks.mode: "off"` in the overlay disables the whole mechanism: never detach, always
   wait in-turn.
-- Never leave work running with no callback address resolved. Without a wake signal, a
-  detached process is silently lost work — run synchronously instead.
+- Never leave work running with no wake signal. A headless session with no sc address has
+  none; a detached process there is silently lost work — run in-turn instead.
 - On wake: reconcile the ledger first, then run step-7 intake for the announced task id
   only. Leave other `awaiting` rows awaiting and end the turn again; the last callback to
   arrive is the one that reaches close-out.
 - Detached fan-out into one shared working tree is for read-only or non-overlapping work
   only. Concurrent writers invalidate the checkpoint protocol — baselines, `changedFiles`,
   and reset attribution all assume one writer. Parallel code briefs that touch overlapping
-  paths take `sc worktree create` isolation, which requires the user's explicit request.
+  paths need isolation, which requires the user's explicit request: `sc worktree create` on
+  the sc path, or the Agent tool's `isolation: "worktree"` for native roles. Background
+  Agent-tool subagents are the default now, so two background writers in one tree is the easy
+  mistake — serialize them unless they are isolated.
+
+### Native worktree isolation
+
+Measured 2026-09-27 on Claude Code 2.1.283. An Agent-tool dispatch with
+`isolation: "worktree"` runs in `<repo>/.claude/worktrees/agent-<id>` on a new branch
+`worktree-agent-<id>`, created from the **committed** `HEAD`. The dispatch returned in the
+background and its completion notification woke the session. A worktree the agent left
+unchanged is removed automatically; one with changes is kept, locked, for the orchestrator.
+
+- Commit (or deliberately leave out) everything the brief depends on before dispatching.
+  Uncommitted state in the main tree is invisible inside the worktree, and a brief that
+  assumes it will be implemented against the wrong baseline.
+- Record the worktree branch and the baseline commit in the ledger row. Intake reads the
+  diff `baseline..worktree-agent-<id>`, not the main tree.
+- Integrate only after intake passes: merge or cherry-pick the branch into the main tree,
+  then remove the worktree and delete the branch. A dropped task is removed the same way.
+- Keep `.claude/worktrees/` in the project's `.gitignore` next to `.autopilot/`, so live
+  worktrees never show up as untracked work in the main tree.
+- Isolation is for parallel writers on overlapping paths and needs the user's explicit
+  request, like `sc worktree create`. A single writer, or writers on disjoint paths, share the
+  main tree under the checkpoint protocol.
 
 ## T1 — Design to architect
 
@@ -459,10 +500,10 @@ The canonical brief remains unchanged; this wrapper records registry selection a
 <external_dispatch>
   <worker_id>registered-worker-id</worker_id>
   <model_family>registry modelFamily</model_family>
-  <capability>code | refactor | test | review | docs | data | security | research</capability>
+  <capability>code | refactor | test | review | docs | data | security | research | design</capability>
   <brief_path>[absolute .autopilot/dispatch/T-###.md path]</brief_path>
   <runner>~/.autopilot/bin/autopilot-worker</runner>
-  <callback>chat:&lt;terminal-id&gt; | none (synchronous)</callback>
+  <callback>chat:&lt;terminal-id&gt; | none (harness notification or in-turn)</callback>
   <mode>foreground | detached</mode>
   <intake>spot-check + conditional red-team + criterion sign-off + native verifier (R7; always fires for external workers)</intake>
 </external_dispatch>
@@ -520,7 +561,7 @@ and emits a `target_error` before stopping when the provider's turn fails, which
 a crashed role from a slow one without polling `sc agent read`. A long-running role brief may
 call `sc agent should-stop --self` at checkpoints so an orchestrator cancellation is honoured
 between steps rather than only by `sc agent stop`. Neither is a wake: both need a live
-orchestrator process, so they belong to synchronous and in-turn paths only.
+orchestrator process, so they belong to in-turn paths only.
 
 `sc agents group create` plus `sc agent send --to group:<name>` may fan one shared
 announcement to independent workers. `sc coordination-state get|set` (with `--if-version`

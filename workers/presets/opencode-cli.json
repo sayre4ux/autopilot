@@ -24,7 +24,7 @@
     "promptDelivery": "file",
     "cwd": "${workdir}",
     "env": {},
-    "timeoutSec": 900,
+    "timeoutSec": 1800,
     "successExitCodes": [
       0
     ]

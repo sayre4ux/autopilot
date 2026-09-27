@@ -27,7 +27,7 @@
     "env": {
       "SUPERCONDUCTOR_MANAGED_AGENT": "0"
     },
-    "timeoutSec": 900,
+    "timeoutSec": 1800,
     "successExitCodes": [
       0
     ]

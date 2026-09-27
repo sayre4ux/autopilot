@@ -2,7 +2,6 @@
 name: Explore
 description: Read-only search agent for broad fan-out searches. Locate code and return compact conclusions with file and line references.
 model: haiku
-effort: low
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
@@ -15,5 +14,6 @@ Lead with the direct answer and avoid file dumps. If the answer is not found, st
 precisely what you searched and where.
 
 This definition must be installed at user level because a plugin agent cannot shadow the
-built-in Explore agent. Pinning broad, read-only reconnaissance to haiku at low effort
-keeps high-volume search off the main-session tier.
+built-in Explore agent. Pinning broad, read-only reconnaissance to haiku keeps high-volume
+search off the main-session tier. There is no `effort` field: Claude Haiku 4.5 does not
+accept the effort parameter.

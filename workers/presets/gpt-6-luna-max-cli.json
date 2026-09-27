@@ -1,0 +1,45 @@
+{
+  "id": "gpt-6-luna-max-cli",
+  "type": "cli",
+  "displayName": "GPT-6 Luna via Codex CLI (openai — cheap long-turn coding, max)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test",
+    "data"
+  ],
+  "modelFamily": "openai",
+  "preferWhen": "Cheap coding with long turns from a fully specified brief: multi-file features, fixes, test backfill, and mechanical refactors where wall-clock time does not matter.",
+  "avoidWhen": "Design decisions the brief leaves open; short tasks a native engineer finishes faster; security-sensitive work; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "codex",
+    "args": [
+      "exec",
+      "--cd",
+      "${workdir}",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "model_reasoning_effort=max",
+      "-m",
+      "gpt-6-luna",
+      "-"
+    ],
+    "promptDelivery": "stdin",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 7200,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}

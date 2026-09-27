@@ -79,3 +79,33 @@ Dispatch the verifier when any of these holds:
 Otherwise the three-gate intake in `command-loop.md` step 7 stands alone. Record
 `verifier: skipped (R7)` in the ledger row. Skipping shifts weight onto the artifact
 spot-check: read the diff itself, never the report alone.
+
+## R8 — Supervisor gate
+
+This rubric is the single source of truth for when the `supervisor` runs. It judges the job,
+not a deliverable, and it is the most expensive role per call, so it runs at gates only.
+
+Dispatch the supervisor when any of these holds:
+
+1. **Plan gate.** Decomposition (command-loop step 5) produced a multi-component or multi-day
+   plan. Run it once, before the first dispatch.
+2. **Milestone gate.** A multi-component job reaches a point where you would check in with the
+   user: a wave of tasks is done and the next wave depends on it.
+3. **Escalation gate.** R4 fires and the failure is not plainly environmental. Run it before
+   choosing the changed approach, so the third attempt is aimed at the cause.
+4. **Final gate.** A multi-component job, or any job with review mode on, is about to close
+   out (step 9). Run it after intake and review, before reporting done.
+
+Single-component and trivial jobs skip it; record `supervisor: skipped (R8)`.
+
+Brief it goal-first: the user's goal in their words, the gate, the ledger, and pointers to the
+artifacts that carry weight. Do not hand it a checklist — it decides what matters at this
+gate. Security tasks go in as summaries; see the Fable section of `roles.md`.
+
+Act on the verdict and record it in the ledger row:
+
+- `ON-TRACK`: continue.
+- `DRIFT`: fix the plan or the routing, record what changed, then continue. A finding you
+  decline to act on is recorded with the reason.
+- `STOP`: ask the user (R3) with the supervisor's stated decision, and dispatch nothing that
+  depends on it until they answer.

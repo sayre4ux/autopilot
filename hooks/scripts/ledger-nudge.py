@@ -43,6 +43,9 @@ def _project_and_session(payload: Any) -> tuple[Path, str | None]:
 
 
 def _owned_active_rows(text: str, session: str | None) -> list[str]:
+    # The shipped ledger template has no session column, so a session filter applies only
+    # when this session's id actually appears in the ledger; otherwise every row is ours.
+    owned_only = session is not None and session in text
     rows = []
     for line in text.splitlines():
         if not line.lstrip().startswith("|"):
@@ -50,7 +53,7 @@ def _owned_active_rows(text: str, session: str | None) -> list[str]:
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if not any(cell.lower() in {"active", "open"} for cell in cells):
             continue
-        if session is None or session in line:
+        if not owned_only or session in line:
             rows.append(line.strip())
     return rows
 
@@ -69,12 +72,13 @@ def main() -> int:
         ledger = project / ".autopilot" / "ledger.md"
         if not ledger.is_file():
             return 0
-        rows = _owned_active_rows(ledger.read_text(encoding="utf-8"), session)
+        text = ledger.read_text(encoding="utf-8")
+        rows = _owned_active_rows(text, session)
         if rows:
-            print(
-                f"Autopilot ledger nudge: {len(rows)} active/open task(s) still owned by this session.",
-                file=sys.stderr,
-            )
+            # Exit-0 stderr is transcript-only; systemMessage is what the user actually sees.
+            owner = "owned by this session" if session and session in text else "open"
+            message = f"Autopilot ledger nudge: {len(rows)} active/open task(s) still {owner} in {ledger}."
+            print(json.dumps({"systemMessage": message}))
         return 0
     except BaseException:
         # Reconciliation advice must never prevent a session from stopping.

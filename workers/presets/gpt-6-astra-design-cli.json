@@ -1,0 +1,43 @@
+{
+  "id": "gpt-6-astra-design-cli",
+  "type": "cli",
+  "displayName": "GPT-6 Astra via Codex CLI (openai — design, medium, read-only)",
+  "capabilities": [
+    "design",
+    "research"
+  ],
+  "modelFamily": "openai",
+  "preferWhen": "Design phase from a different model family: option comparison, interface contracts, migration plans, and a second design opinion alongside the native architect.",
+  "avoidWhen": "Writing or fixing code; routine implementation; security-sensitive work; visual/document deliverables.",
+  "trusted": false,
+  "cli": {
+    "command": "codex",
+    "args": [
+      "exec",
+      "--cd",
+      "${workdir}",
+      "--skip-git-repo-check",
+      "-s",
+      "read-only",
+      "-c",
+      "model_reasoning_effort=medium",
+      "-m",
+      "gpt-6-astra",
+      "-"
+    ],
+    "promptDelivery": "stdin",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 3600,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}

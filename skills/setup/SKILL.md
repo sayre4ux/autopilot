@@ -37,7 +37,7 @@ Check for a pre-existing orchestration setup that Autopilot replaces:
 - `~/.claude/skills/orchestrate/` — a user-level orchestrate skill. If present, it will
   take precedence over the plugin's `autopilot:orchestrate` when the user invokes
   `/orchestrate`, meaning the old harness runs instead of Autopilot.
-- `~/.claude/agents/{architect,engineer,engineer-doc,security-engineer,verifier,reviewer}.md`
+- `~/.claude/agents/{architect,engineer,senior-engineer,engineer-doc,security-engineer,verifier,reviewer,supervisor}.md`
   — user-level role agents. These shadow the plugin's namespaced agents. Dispatches using
   `subagent_type: "autopilot:architect"` still resolve correctly, but the old agents may
   contain dated model pins, absolute paths, or machine-specific tool grants.
@@ -71,14 +71,21 @@ Show exact targets and diffs:
 
 | Target | Proposed behavior |
 |---|---|
-| `~/.claude/settings.json` `model` | Set missing value to `"best"`; if present and different, ask; if already `"best"`, skip |
-| `fallbackModel` | If absent, add `["opus","sonnet"]`; if present, leave and note |
-| `availableModels` | Only when the key already exists, ensure chosen main plus `opus`, `sonnet`, `haiku`; if absent leave unrestricted |
-| `~/.claude/agents/Explore.md` | Install the haiku/low user-level override; show a diff before replacing different content |
+| `~/.claude/settings.json` `model` | Set missing value to `"opus"`; if present and different, ask; if already an `opus` variant (such as `opus[1m]`), skip |
+| `fallbackModel` | If absent, add `["sonnet"]`; if present, leave and note |
+| `availableModels` | Only when the key already exists, ensure chosen main plus `opus`, `fable`, `sonnet`, `haiku`; if absent leave unrestricted |
+| `~/.claude/agents/Explore.md` | Install the haiku user-level override; show a diff before replacing different content |
 | `~/.autopilot/` | Ensure `bin/`, `workers/`, `dispatch/`, `artifacts/`; install runner; seed config and empty lessons only when absent |
 
 Explain that a user-level Explore file is required because plugin agents cannot shadow the
 built-in agent.
+
+Explain the main-model choice: the orchestrator is a long-lived, context-heavy session, so it
+runs on `opus`. On Claude Code 2.1.283 the `best` alias resolves to Claude Fable 5.1, which
+costs 2.5x Opus 5.5 per token and must not orchestrate security-sensitive work (see the Fable
+section of the orchestrate skill's `references/roles.md`). If the current value is `best` or a
+`fable` variant, say so and recommend `opus`, but change it only with approval. Fable reaches
+the harness through the `supervisor` role instead.
 
 Obtain explicit approval for the consolidated plan. An existing, different Explore file or
 config file requires its own clear overwrite decision; never replace either blindly.
@@ -94,7 +101,8 @@ config file requires its own clear overwrite decision; never replace either blin
 - Ensure `.autopilot/` is listed in the target project's `.gitignore`. The checkpoint
   protocol's stash and clean operations destroy briefs, ledger state, and artifacts if the
   directory is untracked. If `.gitignore` does not exist, create it with `.autopilot/`. If
-  it exists but lacks the entry, append it.
+  it exists but lacks the entry, append it. Add `.claude/worktrees/` the same way, so native
+  worktree-isolated dispatches never show up as untracked work in the main tree.
 - Do not mark a worker trusted. Presets are examples; copy only those the user selects.
 
 On re-run, skip identical files. For differing installed runner/template content, show a
@@ -104,8 +112,7 @@ diff and request upgrade approval.
 
 List changed, skipped, and backed-up paths. Re-run JSON validation and runner `--help`.
 Tell the user to restart Claude Code because agents and the main model load at session
-start; skills can hot-reload. Explain how to verify that `/agents` shows Explore at
-haiku/low.
+start; skills can hot-reload. Explain how to verify that `/agents` shows Explore on haiku.
 
 Never put model, fallback, or effort settings inside plugin metadata. All settings changes
 are proposals to the user's own configuration after approval.

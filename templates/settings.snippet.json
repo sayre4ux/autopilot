@@ -1,12 +1,11 @@
 {
-  "model": "best",
+  "model": "opus",
   "fallbackModel": [
-    "opus",
     "sonnet"
   ],
   "availableModels": [
-    "best",
     "opus",
+    "fable",
     "sonnet",
     "haiku"
   ]
