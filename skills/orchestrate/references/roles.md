@@ -42,7 +42,18 @@ absent or fails — not the default to fall back on because the probe was skippe
 ### Effort policy
 
 Effort is tuned to the model generation. Opus 5.5 at `medium` does roughly what Opus 5 did
-at `high`, and its API default is `medium`. So:
+at `high`. Each alias carries its own API default, so an omitted `effort` does not mean the
+same thing across aliases:
+
+| Alias | Current model | API default effort |
+| --- | --- | --- |
+| `opus` | Claude Opus 5.5 | `medium` |
+| `fable` | Claude Fable 5.1 | `high` |
+| `sonnet` | Claude Sonnet 5.5 | `high` |
+| `haiku` | Claude Haiku 4.5 | not supported |
+
+Every shipped role sets `effort` explicitly rather than inheriting, so a role behaves the
+same on a host whose alias resolves elsewhere. So:
 
 - `medium` for one-shot delegated work where a routine defect is cheap to catch at intake:
   `engineer`, `engineer-doc`.
@@ -50,6 +61,11 @@ at `high`, and its API default is `medium`. So:
   and the adversarial roles `security-engineer`, `verifier`, and `reviewer`.
 - `xhigh` and `max` only where a measured eval shows the gain pays for itself. No shipped
   role uses them.
+
+Roles stay on `opus` even where a cheaper model posts comparable benchmark scores, because
+Opus 5.5 reads cache at 0.05x base ($0.20/MTok) against the standard 0.1x. In a long agentic
+loop with a stable prefix, cache reads dominate the input bill, so per-token sticker price
+understates the gap. Move a role off `opus` only with an eval on the actual workload.
 
 Route by what a defect would cost, not by task size: a small change to a public interface
 goes to `senior-engineer`; a large mechanical change goes to `engineer`.

@@ -3,6 +3,9 @@
   // <project>/.autopilot/config.jsonc (project). Every key is optional; absent = shipped default.
 
   // Per-role overrides. Aliases only (opus/fable/sonnet/haiku) — never dated model ids.
+  // API default effort differs per alias: opus (Opus 5.5) medium, fable (Fable 5.1) high,
+  // sonnet (Sonnet 5.5) high, haiku (Haiku 4.5) unsupported. Set effort explicitly; an
+  // omitted value does not mean the same thing across aliases or across hosts.
   // Effort policy (Opus 5.5): medium for one-shot work where a routine defect is caught at
   // intake (engineer, engineer-doc); high where a miss is expensive or propagates (architect,
   // senior-engineer, security-engineer, verifier, reviewer). xhigh/max only behind an eval.

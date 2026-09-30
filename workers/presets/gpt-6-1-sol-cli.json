@@ -1,0 +1,45 @@
+{
+  "id": "gpt-6-1-sol-cli",
+  "type": "cli",
+  "displayName": "GPT-6.1 Sol via Codex CLI (openai — code/review, medium, workspace sandbox)",
+  "capabilities": [
+    "code",
+    "refactor",
+    "test",
+    "review"
+  ],
+  "modelFamily": "openai",
+  "preferWhen": "Bulk implementation or review from a fully specified brief where cost per completed task dominates, or a parallel second implementation from a different model family.",
+  "avoidWhen": "Design decisions the brief leaves open; security-sensitive work; visual/document deliverables; anything needing the native role's repository context.",
+  "trusted": false,
+  "cli": {
+    "command": "codex",
+    "args": [
+      "exec",
+      "--cd",
+      "${workdir}",
+      "--skip-git-repo-check",
+      "-s",
+      "workspace-write",
+      "-c",
+      "model_reasoning_effort=medium",
+      "-m",
+      "gpt-6-1-sol",
+      "-"
+    ],
+    "promptDelivery": "stdin",
+    "cwd": "${workdir}",
+    "env": {
+      "SUPERCONDUCTOR_MANAGED_AGENT": "0"
+    },
+    "timeoutSec": 3600,
+    "successExitCodes": [
+      0
+    ]
+  },
+  "output": {
+    "channel": "stdout",
+    "format": "text",
+    "resultPointer": null
+  }
+}
