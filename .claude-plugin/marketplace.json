@@ -8,7 +8,7 @@
     {
       "name": "autopilot",
       "source": "./",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Multi-agent orchestration with native subagents and registry-driven external workers."
     }
   ]

@@ -101,7 +101,9 @@ callback restarts it — and keeps every dispatch in-turn.
 
 Check which model this session runs on. If it is Fable and the job includes security-sensitive
 work, say so to the user and recommend restarting the job on `opus` before any
-`security-engineer` dispatch; see the Fable section of `references/roles.md`.
+`security-engineer` dispatch; see the Fable section of `references/roles.md`. On a
+mods-capable build the plugin also hides `security-engineer` from a Fable session on the
+Agent-tool path; still tell the user and recommend `opus`.
 
 If the codebase-memory MCP is available, use it as the primary code-discovery tool for
 this job. Before decomposition, ensure the target project is indexed: check `index_status`,

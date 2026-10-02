@@ -89,6 +89,9 @@ defensive security work partway through a turn:
 - Never orchestrate security-sensitive work from a Fable main session. If the orchestrator
   itself resolves to Fable and the job includes `security-engineer` work, tell the user and
   recommend restarting the job on `opus`; do not dispatch security work from that session.
+  On a mods-capable build the plugin hides `security-engineer` from a Fable session on the
+  Agent-tool path only; the tell-and-recommend step still applies, and sc and CLI paths rely
+  on this rule alone.
 - Give `supervisor` summaries of security tasks, not exploit or payload detail. If it declines
   anyway, re-run the same gate on `opus` at `high` through the Agent tool's `model` override,
   log `supervisor: fable declined -> opus`, and treat the result as the gate's verdict.

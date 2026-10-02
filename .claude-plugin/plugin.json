@@ -1,7 +1,7 @@
 {
   "name": "autopilot",
   "displayName": "Autopilot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-agent orchestrator harness for Claude Code: command loop, ledger, dispatch protocol, review cycle, model-economics, and a registry-driven external-worker layer.",
   "author": {
     "name": "Autopilot Contributors"
@@ -15,6 +15,7 @@
     "harness"
   ],
   "skills": "./skills",
+  "types": "./types/index.d.ts",
   "agents": [
     "./agents/architect.md",
     "./agents/engineer.md",
@@ -30,7 +31,7 @@
       "type": "string",
       "title": "Enforcement mode",
       "default": "advisory",
-      "description": "Enforcement-hook posture. off = no hooks fire; advisory = ask before catastrophic Bash commands; strict = deny them."
+      "description": "Enforcement posture for Autopilot's hooks. off = no enforcement (the /ledger view still works); advisory = ask before catastrophic Bash commands, warn the model about briefs without acceptance criteria, and hide security-engineer from a Fable session; strict = deny those Bash commands and criteria-less briefs, hide security-engineer from Fable, and refuse spawns from inside an autopilot role."
     }
   }
 }

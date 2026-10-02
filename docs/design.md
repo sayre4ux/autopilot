@@ -4,7 +4,8 @@
 
 Autopilot packages a complete orchestration process as one Claude Code plugin. It provides
 an auto-invokable orchestration skill, explicit-only setup skill, eight native roles, optional
-enforcement hooks, and a registry-driven worker layer. User and project configuration stays
+enforcement hooks (Python command hooks plus a function-hooks mod), and a registry-driven
+worker layer. User and project configuration stays
 outside the installed plugin.
 
 The central invariant is producer-independent quality: native agents, CLI tools, and MCP
@@ -121,10 +122,26 @@ round three escalates to architect arbitration.
 
 ### Hooks
 
+The Python command hooks run on any build that runs command hooks, `claude -p` included.
 The Bash guard is fail-closed only for a positive catastrophic-pattern match in strict mode.
-Advisory mode turns the same match into a permission prompt, so a person decides. The ledger nudge is advisory. Both
-catch all internal errors and return success so a parsing or platform defect cannot break
-normal host behavior.
+Advisory mode turns the same match into a permission prompt, so a person decides. The brief
+check, on Agent dispatches of architect, engineer, senior-engineer, engineer-doc, and
+security-engineer, looks for non-empty acceptance criteria in the inline `<dispatch>` block
+or the `.md` brief the prompt names; strict denies a brief without them, advisory adds a note
+to the model's context, and an unreadable brief is not judged. The ledger nudge is advisory.
+All three catch internal errors and return success so a parsing or platform defect cannot
+break normal host behavior. They resolve `enforcement` from the plugin setting, then
+`~/.autopilot/config.jsonc`, then `advisory`.
+
+The function-hooks mod (`hooks/register.tsx`) needs a mods-capable Claude Code (written and
+tested on 2.1.287) and reads only the plugin setting. In a Fable main session it hides
+`autopilot:security-engineer` from the agent list and refuses its dispatch in advisory and
+strict; at spawn time strict denies and advisory toasts. It also denies (strict) or toasts
+(advisory) a spawn whose parent is an `autopilot:*` agent, which only a misconfigured role
+could trigger. `/ledger` opens a read-only ledger pane in every mode, `off` included. The mod
+sees only Agent-tool dispatches: sc-managed role agents and registry CLI workers are outside
+it, so on those paths the doctrine is the only enforcement. Its handlers pass the event
+through on error.
 
 ## Trust model
 

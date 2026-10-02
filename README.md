@@ -12,7 +12,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/sayre4ux/autopilot/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/actions/workflows/ci.yml)
 [![Claude Code plugin](https://img.shields.io/badge/claude%20code-plugin-8b5cf6?style=flat-square&labelColor=1c1b22)](https://docs.claude.com/en/docs/claude-code/overview)
-[![Version](https://img.shields.io/badge/version-0.2.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.3.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
 
@@ -114,7 +114,7 @@ flowchart TB
     subgraph plugin["Plugin package"]
         SK["skills/<br/>setup · orchestrate + references"]
         AG["agents/<br/>architect · engineer · senior-engineer · engineer-doc<br/>security-engineer · verifier · reviewer · supervisor"]
-        HK["hooks/<br/>guard-bash · ledger-nudge"]
+        HK["hooks/<br/>guard-bash · brief-check · ledger-nudge<br/>register.tsx mod (Fable gate · /ledger)"]
         WR["workers/<br/>autopilot-worker runner + presets"]
     end
 
@@ -246,6 +246,9 @@ Autopilot — observational results from real work, not a controlled benchmark:
 
 Requires a current Claude Code release with plugin user configuration, agent
 `model`/`effort` frontmatter, the `opus` and `fable` aliases, and `fallbackModel` support.
+The function-hooks mod (`hooks/register.tsx`) additionally needs a mods-capable Claude Code:
+it was written and tested on 2.1.287, where mods are on by default, and validated on 2.1.284
+and 2.1.286. Skills, agents, workers, and the Python command hooks work on older builds.
 
 From Claude Code, add this repository as a marketplace and install the plugin:
 
@@ -273,11 +276,26 @@ and waits for approval before writing. It can:
 Existing settings are backed up once. Existing Explore and overlay files are diffed, never
 blindly replaced. Restart Claude Code after setup so agent and model changes load.
 
+To go back to 0.2.0, the last release without the mod, install from a clone of the
+`v0.2.0` tag. Both versions use the marketplace name `autopilot-marketplace`, so remove the
+current one first:
+
+```bash
+claude plugin uninstall autopilot@autopilot-marketplace
+claude plugin marketplace remove autopilot-marketplace
+git clone --branch v0.2.0 https://github.com/sayre4ux/autopilot autopilot-0.2.0
+claude plugin marketplace add ./autopilot-0.2.0
+claude plugin install autopilot@autopilot-marketplace
+```
+
 For local development, validate from the repository root:
 
 ```bash
 claude plugin validate .
 ```
+
+CI also runs `claude plugin validate --strict .claude-plugin/plugin.json` and
+`claude plugin test .` on Claude Code 2.1.287.
 
 ## Workers
 
@@ -367,19 +385,60 @@ in the run, which is why the record is marked avoid-when for security-sensitive 
 
 ## Enforcement hooks
 
-Autopilot includes optional fail-open hooks. `advisory` is the default:
+Autopilot includes optional fail-open hooks in two parts: Python command hooks, which run on
+any build that runs command hooks (including `claude -p` and CI), and a function-hooks mod
+(`hooks/register.tsx`) that needs a mods-capable build. `advisory` is the default.
+
+Command hooks:
 
 - The Bash guard recognizes a deliberately small set of catastrophic commands. Strict mode
   denies a positive match; advisory mode turns it into a permission prompt with the reason, so
   a person sees it before it runs.
+- The brief check runs on Agent-tool dispatches of `autopilot:architect`, `engineer`,
+  `senior-engineer`, `engineer-doc`, and `security-engineer`. It looks for a non-empty
+  `<acceptance_criteria>` block, or a markdown "Acceptance criteria" heading with content, in
+  the inline `<dispatch>` block or in the `.md` brief path(s) named in the prompt. Advisory
+  mode adds a note to the model's context; strict mode denies the dispatch. A brief it cannot
+  read is not judged. Reviewer, verifier, and supervisor dispatches are exempt.
 - The Stop hook shows a message when the ledger still has active/open rows. The shipped
   ledger has no session column, so every such row counts. Only when this session's id appears
   in the ledger does it narrow to the rows carrying that id.
-- Any hook parsing, runtime, or platform error allows the operation. A broken hook must not
-  brick Bash or trap a session.
 
-Set plugin user configuration `enforcement` to `off`, `advisory`, or `strict`. The plugin
-can also be disabled entirely from `/plugin`.
+The mod:
+
+- **Fable gate.** When the session's main model is Fable, `autopilot:security-engineer` is
+  hidden from the model's agent list and refused at dispatch, in advisory and strict alike. A
+  spawn that gets past that is denied in strict and shown as a toast in advisory. The
+  orchestrator doctrine (tell the user, recommend restarting on `opus`) still applies.
+- **Nested-spawn backstop.** A spawn whose parent is an `autopilot:*` agent is denied in strict
+  and shown as a toast in advisory. No autopilot role lists the Agent tool, so this fires only
+  for a misconfigured role; it does not catch a general-purpose agent carrying a role brief.
+- **`/ledger`.** A read-only pane showing `.autopilot/ledger.md`: header lines and the task
+  table with status markers, Refresh and Close buttons, refreshed at the end of each main-loop
+  turn while open. The status line reads `autopilot: N active · M awaiting`. In `claude -p` or
+  an SDK host with no surface it answers with a text summary. It never writes a file and works
+  even with enforcement `off`. Command names cannot contain `:`, so it is `/ledger` rather than
+  `/autopilot:ledger` and shares the global command namespace.
+
+The mod sees only Agent-tool dispatches. sc-managed role agents run as separate processes and
+registry CLI workers run through the runner; neither is visible to it, and on those paths the
+doctrine text is the only enforcement.
+
+Any hook parsing, runtime, or platform error allows the operation. A broken hook must not
+brick Bash or trap a session.
+
+Set plugin user configuration `enforcement` to `off`, `advisory`, or `strict`:
+
+| Mode | Behavior |
+|---|---|
+| `off` | No enforcement; the `/ledger` view still works |
+| `advisory` | Ask before catastrophic Bash commands, warn the model about briefs without acceptance criteria, hide `security-engineer` from a Fable session |
+| `strict` | Deny those Bash commands and criteria-less briefs, hide `security-engineer` from Fable, refuse spawns from inside an autopilot role |
+
+The Python hooks resolve the mode from that setting, then from `enforcement` in
+`~/.autopilot/config.jsonc`, then default to `advisory`. The mod reads only the plugin
+setting. `disableAllHooks` or `--safe-mode` stops the mod and the command hooks while skills
+and agents still load. The plugin can also be disabled entirely from `/plugin`.
 
 ## Degradation
 

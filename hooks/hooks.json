@@ -1,5 +1,5 @@
 {
-  "description": "Optional fail-open Autopilot enforcement and reconciliation hooks. Enforcement mode is resolved by the hook scripts from the plugin setting (CLAUDE_PLUGIN_OPTION_ENFORCEMENT, from userConfig.enforcement), then ~/.autopilot/config.jsonc, defaulting to advisory.",
+  "description": "Optional fail-open Autopilot hooks. Command hooks (Python) guard catastrophic Bash commands, check autopilot dispatch briefs for acceptance criteria, and nudge about open ledger rows; they resolve enforcement from CLAUDE_PLUGIN_OPTION_ENFORCEMENT (userConfig.enforcement), then ~/.autopilot/config.jsonc, defaulting to advisory. The function-hooks module (register.tsx) adds the Fable gate for security-engineer, a nested-spawn backstop, and the read-only /ledger pane; it reads userConfig.enforcement only.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +8,15 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard-bash.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/brief-check.py\""
           }
         ]
       }
@@ -22,5 +31,8 @@
         ]
       }
     ]
-  }
+  },
+  "modules": [
+    "./register.tsx"
+  ]
 }
