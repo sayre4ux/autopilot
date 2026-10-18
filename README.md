@@ -15,116 +15,47 @@
 [![Version](https://img.shields.io/badge/version-0.3.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
-
-[Install](#install) · [How it works](#how-it-works) · [Enforcement and the mod](#enforcement-and-the-mod) · [Workers](#workers) · [super.engineering](#better-with-superengineering) · [Adversarial review](#adversarial-review) · [Field results](#field-results) · [Design docs](docs/design.md)
+[Wiki](https://sayre4ux.github.io/autopilot/) · [Install](#install) · [How it works](#how-it-works) · [Roles](#roles) · [Workers](#workers)
 
 </div>
 
 ---
 
-## TL;DR
+Autopilot is a Claude Code plugin for jobs too big for one context. It plans the work,
+dispatches fresh-context agents and external workers, and treats everything that comes back as
+unverified until it passes the same gates.
 
-Claude Code plugin for jobs too big for one context. It plans, dispatches
-fresh-context agents, and distrusts everything that comes back.
-
-- **Task ledger** — work survives restarts and context resets
-- **Eight native roles + external workers** — Codex (GPT-6), Grok, and others through one runner
-- **Adversarial review** — 2+ independent reviewers assume the code is wrong;
-  authors are staked to pass in one round
-- **Evidence gates** — same intake for every result, whoever produced it
-- **Fails soft** — no external worker or reviewer is ever load-bearing
-- **Guardrails in code** — hooks check briefs for acceptance criteria, and on a mods-capable
-  Claude Code a mod keeps security work off Fable and adds a live `/ledger` pane
-- **Best paired with [super.engineering](#better-with-superengineering)** — roles run as
-  real sc agents in their own panes, on distinct model families
-
-```text
-/plugin marketplace add sayre4ux/autopilot
-/plugin install autopilot@autopilot-marketplace
-/autopilot:setup
-```
-
-Quality does not depend on which worker produced the change. Every result returns through
-the same intake gates, and a fresh-context native verifier gates the cases that need it —
-always for external-worker code, plus security, unattended, and weak-evidence work.
-
-## Why
-
-Large agentic jobs fail in predictable ways: the main context fills with mechanical work,
-agents assume context they were never given, passing tests hide hardcoded fixtures, and
-promised work disappears after interruption. Autopilot turns those failure modes into
-explicit mechanics:
-
-- Delegate only when isolation, parallelism, or scale offsets dispatch overhead.
-- Give every worker a complete brief with acceptance criteria and redlines.
-- Track non-trivial work before acting so restarts do not erase commitments.
-- Pit authors against independent adversarial reviewers, with real stakes on both sides.
-- Require real evidence, including a successful run for mechanisms.
-- Cap retries and change approach instead of repeating a failed invocation.
-
-The doctrine is written for the weakest available orchestrator tier. Model bindings use
-aliases, and external workers are optional.
+- **Task ledger.** Work survives restarts and context resets.
+- **Eight native roles plus external workers.** Codex (GPT-6), Grok, opencode, and omp run
+  through one runner.
+- **Evidence gates.** Every result gets the same intake, and a fresh-context verifier checks
+  all external-worker code.
+- **Adversarial review.** Two or more independent reviewers assume the code is wrong.
+- **Fails soft.** No external worker or reviewer is ever required.
+- **Guardrails in code.** Hooks check briefs for acceptance criteria; on a mods-capable
+  Claude Code, a mod keeps security work off Fable and adds a live `/ledger` pane.
 
 ## Install
 
-### Requirements
-
-Requires a current Claude Code release with plugin user configuration, agent
-`model`/`effort` frontmatter, the `opus` and `fable` aliases, and `fallbackModel` support.
-The function-hooks mod (`hooks/register.tsx`) additionally needs a mods-capable Claude Code:
-it was written and tested on 2.1.287, where mods are on by default, and validated on 2.1.284
-and 2.1.286. Skills, agents, workers, and the Python command hooks work on older builds.
-
-### Install the plugin
-
-From Claude Code, add this repository as a marketplace and install the plugin:
-
 ```text
 /plugin marketplace add sayre4ux/autopilot
 /plugin install autopilot@autopilot-marketplace
-```
-
-Then run:
-
-```text
 /autopilot:setup
 ```
 
-### What setup does
-
-Setup is explicit-only. It first inspects the current configuration, then presents one plan
-and waits for approval before writing. It can:
-
-- Merge `model: "opus"` and a fallback alias list into user settings without replacing
-  unrelated keys. It advises against `best`, which resolves to Fable 5.1 on current builds.
-- Extend an existing `availableModels` allowlist; it never creates an allowlist.
-- Install a user-level haiku Explore override. User level is required because a plugin
-  agent cannot shadow the built-in Explore agent.
-- Create the runtime skeleton and install the worker runner.
-
-Existing settings are backed up once. Existing Explore and overlay files are diffed, never
-blindly replaced. Restart Claude Code after setup so agent and model changes load.
-
-### Going back to 0.2.0
-
-0.2.0 is the last release without the mod. Both versions use the marketplace name
-`autopilot-marketplace`, so remove the current one first, then install from a clone of the
-`v0.2.0` tag:
-
-```bash
-claude plugin uninstall autopilot@autopilot-marketplace
-claude plugin marketplace remove autopilot-marketplace
-git clone --branch v0.2.0 https://github.com/sayre4ux/autopilot autopilot-0.2.0
-claude plugin marketplace add ./autopilot-0.2.0
-claude plugin install autopilot@autopilot-marketplace
-```
+Setup shows its plan and waits for approval before writing anything. It needs a current
+Claude Code with the `opus` and `fable` aliases; the mod was tested on 2.1.287. Restart Claude
+Code afterwards. See [docs/install.md](docs/install.md) for requirements, what setup changes,
+downgrading, and uninstalling.
 
 ## How it works
 
-The `/autopilot:orchestrate` skill runs a ten-step loop. Steps 0–5 plan and write the
-ledger; steps 6–9 dispatch, take results through the gates, and close out.
+`/autopilot:orchestrate` runs a ten-step loop. Steps 0–5 plan the job and write the ledger;
+steps 6–9 dispatch, take results through the gates, and close out. Code work over three files,
+over 200 changed lines, or spanning several components can enter it automatically. Documents
+and visuals enter only when you invoke it.
 
-<a href="docs/diagrams/command-loop.html">
+<a href="https://sayre4ux.github.io/autopilot/diagrams/command-loop.html">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/command-loop-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/command-loop-light.png">
@@ -132,9 +63,10 @@ ledger; steps 6–9 dispatch, take results through the gates, and close out.
   </picture>
 </a>
 
-### Architecture
+The orchestrator is the only dispatcher. Results from native roles and external workers pass
+the same intake gates, then the verifier and the optional review panel, before they return.
 
-<a href="docs/diagrams/architecture.html">
+<a href="https://sayre4ux.github.io/autopilot/diagrams/architecture.html">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture-light.png">
@@ -142,311 +74,57 @@ ledger; steps 6–9 dispatch, take results through the gates, and close out.
   </picture>
 </a>
 
-Both diagrams have interactive versions with source links on every node:
-[architecture](docs/diagrams/architecture.html) and
-[command loop](docs/diagrams/command-loop.html). Download and open them in a browser;
-GitHub shows HTML files as source.
+Click either diagram for the interactive version, with a source link on every node.
 
-### Roles
-
-Native roles cover architecture, code at two effort tiers, visual documents, security,
-verification, review, and project-level supervision. The orchestrator is the only
-dispatcher; agents never spawn agents.
+## Roles
 
 | Role | Model / effort | Job |
 |---|---|---|
 | architect | opus / high | Design, trade-offs, arbitration; no production code |
 | engineer | opus / medium | Normal code, scripts, data |
-| senior-engineer | opus / high | Code where a defect is expensive: interfaces, concurrency, migrations, data integrity |
+| senior-engineer | opus / high | Code where a defect is expensive |
 | engineer-doc | opus / medium | Documents and visuals, rendered and inspected |
 | security-engineer | opus / high | Auth, secrets, crypto, validation, hardening |
 | verifier | opus / high | `CONFIRMED` or `REFUTED`; never fixes |
 | reviewer | opus / high | Adversarial findings by severity; never fixes |
-| supervisor | fable / high | `ON-TRACK`, `DRIFT`, or `STOP` for the whole job, at plan, milestone, escalation, and final gates |
+| supervisor | fable / high | `ON-TRACK`, `DRIFT`, or `STOP` for the whole job |
 
-Efforts are tuned for Claude Opus 5.5, where `medium` does roughly what Opus 5 did at `high`.
-The orchestrator itself runs on `opus`: Fable costs 2.5x per token and its safety classifiers
-can decline defensive security work partway through, so it supervises rather than drives.
-
-### Entry and delegation
-
-Work above the software threshold—more than three files, more than 200 changed lines, or
-multi-component design—may auto-enter. Document, deck, visual, and prose work enters only
-when explicitly orchestrated.
-
-Auto-entry starts the loop; it does not by itself guarantee that agents spawn. Both primary
-vehicles can restrict delegation to what the user asked for, and both outrank any plugin or
-`CLAUDE.md` policy. Claude Code may inject a system-prompt line confining Agent-tool calls to
-requested delegation; whether it is present varies by build. `sc instructions orchestration` states that
-subagent, delegation, and parallel-work language never authorizes `sc agent`, `sc agents`,
-`sc team`, or `sc layout`, and that delegation must not be inferred from task size. On an
-auto-entered job the user asked for the work and never asked for agents, so only registry
-CLI workers invoked through Bash remain available. If such a job completes inline, that is
-the mechanism; typing `/autopilot:orchestrate` satisfies both conditions and clears it.
-
-### Wake
-
-Dispatched work wakes the session when it finishes, so the orchestrator ends its turn instead of
-idling. There are two wake channels:
-
-- **sc callback.** With a resolved sc address, the runner emits the callback for CLI workers
-  (Codex, Grok, opencode, omp) on every exit path, and sc-managed agents carry the send command
-  in their brief. It survives the orchestrator's process exiting, which is what makes fan-out
-  usable from a headless `claude -p` session.
-- **Claude Code task notification.** Without sc, the runner is launched as a background Bash
-  task and Agent-tool subagents run in the background; Claude Code wakes the session when each
-  finishes. This needs a persistent interactive session.
-
-A headless session with neither keeps every dispatch in-turn. Long workers must go out of turn
-either way: a foreground Bash call is killed at 10 minutes, and max-effort coders routinely run
-for an hour.
-
-### State
-
-Runtime state belongs to the user and project, not the plugin:
-
-| Location | Purpose |
-|---|---|
-| `~/.autopilot/config.jsonc` | Global role, review, and worker preferences |
-| `~/.autopilot/workers/*.json` | Global worker registry |
-| `<project>/.autopilot/` | Project overlay, worker overrides, ledger, briefs, artifacts, lessons |
-
-Project records and overlay values override matching global values.
-
-Separately from that gitignored state, a project may keep a committed root `DEVLOG.md` as
-its handover surface for any agent harness — a one-screen State header rewritten at each
-close-out plus append-only numbered entries with verification evidence. Autopilot
-maintains an existing devlog (single writer: the orchestrator) but never creates one
-uninvited; reference it from `CLAUDE.md` and `AGENTS.md` so Claude, Codex, and other tools
-all find it on a cold pickup.
-
-## Enforcement and the mod
-
-Autopilot includes optional fail-open hooks in two parts: Python command hooks, which run on
-any build that runs command hooks (including `claude -p` and CI), and a function-hooks mod
-(`hooks/register.tsx`) that needs a mods-capable build. `advisory` is the default.
-
-Command hooks:
-
-- The Bash guard recognizes a deliberately small set of catastrophic commands. Strict mode
-  denies a positive match; advisory mode turns it into a permission prompt with the reason, so
-  a person sees it before it runs.
-- The brief check runs on Agent-tool dispatches of `autopilot:architect`, `engineer`,
-  `senior-engineer`, `engineer-doc`, and `security-engineer`. It looks for a non-empty
-  `<acceptance_criteria>` block, or a markdown "Acceptance criteria" heading with content, in
-  the inline `<dispatch>` block or in the `.md` brief path(s) named in the prompt. Advisory
-  mode adds a note to the model's context; strict mode denies the dispatch. A brief it cannot
-  read is not judged. Reviewer, verifier, and supervisor dispatches are exempt.
-- The Stop hook shows a message when the ledger still has active/open rows. The shipped
-  ledger has no session column, so every such row counts. Only when this session's id appears
-  in the ledger does it narrow to the rows carrying that id.
-
-The mod:
-
-- **Fable gate.** When the session's main model is Fable, `autopilot:security-engineer` is
-  hidden from the model's agent list and refused at dispatch, in advisory and strict alike. A
-  spawn that gets past that is denied in strict and shown as a toast in advisory. The
-  orchestrator doctrine (tell the user, recommend restarting on `opus`) still applies.
-- **Nested-spawn backstop.** A spawn whose parent is an `autopilot:*` agent is denied in strict
-  and shown as a toast in advisory. No autopilot role lists the Agent tool, so this fires only
-  for a misconfigured role; it does not catch a general-purpose agent carrying a role brief.
-- **`/ledger`.** A read-only pane showing `.autopilot/ledger.md`: header lines and the task
-  table with status markers, Refresh and Close buttons, refreshed at the end of each main-loop
-  turn while open. The status line reads `autopilot: N active · M awaiting`. In `claude -p` or
-  an SDK host with no surface it answers with a text summary. It never writes a file and works
-  even with enforcement `off`. Command names cannot contain `:`, so it is `/ledger` rather than
-  `/autopilot:ledger` and shares the global command namespace.
-
-The mod sees only Agent-tool dispatches. sc-managed role agents run as separate processes and
-registry CLI workers run through the runner; neither is visible to it, and on those paths the
-doctrine text is the only enforcement.
-
-Any hook parsing, runtime, or platform error allows the operation. A broken hook must not
-brick Bash or trap a session.
-
-Set plugin user configuration `enforcement` to `off`, `advisory`, or `strict`:
-
-| Mode | Behavior |
-|---|---|
-| `off` | No enforcement; the `/ledger` view still works |
-| `advisory` | Ask before catastrophic Bash commands, warn the model about briefs without acceptance criteria, hide `security-engineer` from a Fable session |
-| `strict` | Deny those Bash commands and criteria-less briefs, hide `security-engineer` from Fable, refuse spawns from inside an autopilot role |
-
-The Python hooks resolve the mode from that setting, then from `enforcement` in
-`~/.autopilot/config.jsonc`, then default to `advisory`. The mod reads only the plugin
-setting. `disableAllHooks` or `--safe-mode` stops the mod and the command hooks while skills
-and agents still load. The plugin can also be disabled entirely from `/plugin`.
+Efforts are tuned for Opus 5.5. The orchestrator runs on `opus`; Fable supervises rather than
+drives, because it costs 2.5x per token and can decline defensive security work.
 
 ## Workers
 
-Workers are JSON records validated by
-[`workers/registry.schema.json`](workers/registry.schema.json). Three types are supported:
-
-| Type | Invocation |
-|---|---|
-| `cli` | `~/.autopilot/bin/autopilot-worker` |
-| `subagent` | Claude Code Agent tool |
-| `mcp` | The record's named MCP tool |
-
-The shipped files in [`workers/presets/`](workers/presets/) are editable examples. Adding a
-worker does not require changing the plugin.
-
-| Preset | Model / effort | Use | Timeout |
-|---|---|---|---|
-| `gpt-6-astra-design-cli` | GPT-6 Astra / medium, read-only | Design phase: a second design opinion from another family | 3600s |
-| `gpt-6-luna-max-cli` | GPT-6 Luna / max | Cheap coding with long turns from a fully specified brief | 7200s |
-| `grok-4.7-review-cli` | Grok 4.7 / high, read-only | Third-family review | 3600s |
-| `grok-4.7-fix-cli` | Grok 4.7 / high | Fixing verified findings | 3600s |
-| `opencode-cli` | opencode default | Cheap bulk execution | 1800s |
-| `omp-cli` | omp's configured model | Cheap bulk execution | 1800s |
-
-Timeouts come from observed run lengths: Luna at max effort has finished runs near an hour,
-and Grok 4.7 review runs reach about half an hour. The runner accepts up to 14400s.
-
-A CLI dispatch uses:
-
-```bash
-~/.autopilot/bin/autopilot-worker run <worker-id> \
-  --brief <absolute-brief-path> \
-  --workdir <project-root>
-```
-
-The runner substitutes known placeholders as separate arguments, never through a shell. It
-enforces timeouts and writes `<task-id>.out` plus `<task-id>.meta.json`. Untrusted records
-show the resolved command and require approval; setup never marks one trusted.
-
-External work receives the identical brief and gates as native work. One failed external
-run may retry with its failure trail. The second failure escalates to the native engineer,
-or security engineer for security work.
-
-### Codex compatibility
-
-Codex works as an external `cli` worker (the `gpt-6-*` presets): the brief is delivered over
-stdin to `codex exec`, the record pins the model, reasoning effort, and sandbox (`read-only`
-for design, `workspace-write` for coding), and the runner enforces the timeout and emits the
-completion callback on every exit path. Codex records stay `trusted: false`, so the resolved
-command requires approval, and they are marked avoid-when for security-sensitive and visual
-work.
-
-One wrapper caveat applies to the provider binaries, not to the
-[sc integration](#better-with-superengineering): in super.engineering-managed sessions the
-binary on PATH resolves to an agent wrapper that changes the invocation. For `codex` the
-wrapper spawns a session watcher and never exits, so `codex exec` hangs until killed. For
-`omp` it prepends `-e <hook>.ts` to the argv, which the top-level flags tolerate but
-subcommands such as `omp plugin` reject outright. Every shipped preset built on a wrapped
-binary therefore sets `SUPERCONDUCTOR_MANAGED_AGENT=0` to force the wrapper's clean
-passthrough branch — keep that override when editing them. Verified against wrapper v3
-(codex 2026-07-26, omp 2026-07-30): both branches engage whenever a managed session exports
-the variable as `1`. The override governs the wrapper's normal path only; the separate
-command-override branch (`SUPERCONDUCTOR_COMMAND_OVERRIDE_DISPATCH=1`) is evaluated first and
-ignores the variable, so invoking the real binary by absolute path remains the stronger
-guarantee.
-
-### omp compatibility
-
-omp (oh-my-pi) works as an external `cli` worker
-([`omp-cli.json`](workers/presets/omp-cli.json)): the brief is delivered as an `@file`
-message to `omp -p`, `--no-session` keeps worker runs out of the session store, and results
-are collected from the worktree. The record pins no model, so the run uses whatever omp
-resolves from its own configuration (`modelRoles.default` in `~/.omp/agent/config.yml`). That
-is the point of the record — and the reason its `modelFamily` is `omp-configured` rather than
-a real family name: the adversarial panel cannot treat it as a guaranteed independent family,
-because the family is whatever the local config says today. When omp is the *producer*,
-resolve that value before seating a reviewer, or the panel will count an opaque family as
-independent when it is not.
-
-Know the approval boundary before enabling it. Like every shipped record it is
-`trusted: false`, so the runner prints the resolved command and waits for approval — but
-`--auto-approve` is required for an unattended run, and it means that once the command is
-approved, omp self-approves **every** subsequent tool call it makes inside `--workdir`: edits,
-writes, shell commands, network access. That single command approval is the last human gate
-in the run, which is why the record is marked avoid-when for security-sensitive work. Drop
-`--auto-approve` if you intend to supervise a run interactively instead.
-
-## Better with super.engineering
-
-Autopilot runs standalone on stock Claude Code, but it is built to sit on top of
-[super.engineering](https://super.engineering) and its `sc` CLI, and that is the
-recommended way to run it. Where sc is available it is the dispatch vehicle; Agent-tool
-dispatch is the degradation, not the default.
-
-The orchestrator probes once per job — `sc` on PATH and `sc agents list --output json`
-succeeding — and if it answers, four things change:
-
-- **Roles become real agents.** Each dispatch launches as a labeled sc agent
-  (`t-###-<role>`) in its own pane through `sc layout run`, so you watch each role work
-  instead of waiting on an opaque subagent. Follow-ups, retries, and review rounds go back
-  to the same live agent with `sc agent send`.
-- **Cross-family review stops being aspirational.** The adversarial panel resolves real
-  providers from `sc layout capabilities` and deliberately seats a reviewer from a
-  different family than the producer. That disjoint-findings result under
-  [Field results](#field-results) is what this buys.
-- **Fan-out survives a headless session.** `sc agents get` resolves a callback address, so
-  finished workers wake the dispatching session by queued message rather than by being
-  waited on. Without one, a headless session keeps every dispatch in-turn.
-- **True isolation when paths overlap.** Parallel code briefs touching the same files take
-  `sc worktree create` instead of sharing one working tree — only ever on your explicit
-  request.
-
-None of it is required. Any sc failure, at probe time or mid-job, falls through to
-Agent-tool dispatch with the same brief and logs the degradation. Registry `cli` and `mcp`
-workers are unaffected either way.
-
-## Adversarial review
-
-Review is optional (`off`, `final`, `per-component`) and, when it runs, adversarial on
-both sides. Producers are briefed to pass in one round: every confirmed blocking finding
-is recorded against their work, and disclosure is always cheaper than concealment — a
-limitation reported with evidence costs nothing, a defect the panel finds that the report
-glossed over costs the most.
-
-The final gate runs a panel of at least two independent reviewers (`reviewPanelSize`,
-default 2), launched in parallel with fresh contexts and no visibility into each other,
-preferring distinct model families. Each reviewer presumes the deliverable defective and
-must earn a `PASS` with evidence of absence. Findings merge by union — one reviewer's
-silence never weakens the other's finding — and are cross-scored: confirmed defects a
-reviewer missed, and findings that dissolve under the orchestrator's check, are both
-recorded and feed future reviewer selection. Blocking findings cap at three rounds before
-architect arbitration. A single usable reviewer degrades to a solo review, logged, never a
-broken loop.
+External workers are JSON records in `~/.autopilot/workers/` or the project's `.autopilot/`.
+The shipped [presets](workers/presets/) cover GPT-6 through Codex, Grok 4.7, opencode, and
+omp. External work gets the same brief and gates as native work; a second failure escalates
+to a native role. Autopilot runs on stock Claude Code and uses
+[super.engineering](https://super.engineering) as its dispatch vehicle when `sc` is available.
 
 ## Field results
 
-Numbers from one multi-week production build (a Rust sandboxing CLI) run end-to-end under
-Autopilot — observational results from real work, not a controlled benchmark:
+From one multi-week production build run under Autopilot (observed, not a benchmark):
 
-- Independent cross-family review confirmed **25+ critical/major defects in code that had
-  already passed compile and its test suite** — among them an IPv6 containment bypass, a
-  destructive-uninstall safety hole, and a teardown race that killed live sessions.
-- Two-reviewer panels earned their cost directly: on identical briefs, the reviewers'
-  critical findings were **disjoint** — each found criticals the other missed. A solo
-  reviewer would have shipped one either way.
-- The false-positive filter worked in both directions: 3 review findings were refuted by
-  evidence and never reached the implementer.
-- Across 54 external-worker dispatches (three model families), **no failed dispatch lost
-  work** — every failure recovered by retry, continuation brief, or family switch.
-- The project's own test suite grew from 5 to 224 passing tests over the ledger's ~70
-  tasks.
+- Cross-family review confirmed **25+ critical or major defects in code that already passed
+  its tests**.
+- On identical briefs, two reviewers' critical findings were **disjoint**; one reviewer
+  alone would have missed some.
+- Across 54 external-worker dispatches in three model families, **no failure lost work**.
 
-## Degradation
+## Docs
 
-Autopilot has no required external worker or reviewer:
+The full docs are published at **[sayre4ux.github.io/autopilot](https://sayre4ux.github.io/autopilot/)**.
 
-| Failure | Behavior |
+| Page | Covers |
 |---|---|
-| Worker registry empty | Dispatch the matching native role |
-| Runner or worker command unavailable | Log the failure and use the native role |
-| External worker fails twice | Escalate with its full evidence trail |
-| Independent review worker unavailable | Fill the panel with the native reviewer; solo review when only one seat fills |
-| Only one model tier available | Keep role separation, strengthen briefs, reduce parallelism |
-| Claude Code without mods | Skills, agents, workers, and the Python command hooks still run; the Fable gate, nested-spawn backstop, and `/ledger` are absent (builds older than 2.1.284 are untested) |
-
-Aliases (`opus`, `sonnet`, `haiku`, `fable`) keep role bindings independent of dated model releases.
-The system remains functional with review off.
+| [Install](docs/install.md) | Requirements, setup, downgrade to 0.2.0, uninstall |
+| [How it works](docs/how-it-works.md) | Roles, entry and delegation, wake channels, state, degradation |
+| [Enforcement and the mod](docs/enforcement.md) | Hooks, the Fable gate, `/ledger`, enforcement modes |
+| [Workers](docs/workers.md) | Registry, presets, runner, Codex and omp notes |
+| [super.engineering](docs/super-engineering.md) | What changes when `sc` is the dispatch vehicle |
+| [Adversarial review](docs/review.md) | Review panel, merge rules, full field results |
+| [Design](docs/design.md) | Architecture, trust boundaries, invariants |
 
 ## Development
-
-Validate the plugin manifest, hooks, and mod, then run both test suites from the repository root:
 
 ```bash
 claude plugin validate --strict .claude-plugin/plugin.json
@@ -454,26 +132,8 @@ claude plugin test .
 uv run pytest -v
 ```
 
-`claude plugin validate .` on the repository root checks only the marketplace manifest. CI runs
-all three commands, the first two on Claude Code 2.1.287.
-
-## Uninstall
-
-1. Disable and uninstall `autopilot` with `/plugin`.
-2. Remove `~/.autopilot/` if its registries, artifacts, and lessons are no longer needed.
-3. Remove `~/.claude/agents/Explore.md` only if setup installed it and you no longer want
-   the override.
-4. Restore the setup-created pristine settings backup, or remove only the keys you approved
-   during setup. Preserve unrelated settings.
-5. Restart Claude Code.
-
-Project `.autopilot/` directories contain job history and artifacts; inspect them before
-deleting.
-
-## Contributing
-
-See [`docs/design.md`](docs/design.md) for architecture, trust boundaries, and invariants.
-Keep user-specific configuration outside the plugin, preserve native degradation, and add
+CI runs all three, the first two on Claude Code 2.1.287. Contributions should keep
+user-specific configuration outside the plugin, preserve native degradation, and include
 real-run evidence for mechanism changes.
 
 ## License
