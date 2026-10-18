@@ -121,49 +121,31 @@ claude plugin install autopilot@autopilot-marketplace
 
 ## How it works
 
-The `/autopilot:orchestrate` skill runs a ten-step loop:
+The `/autopilot:orchestrate` skill runs a ten-step loop. Steps 0–5 plan and write the
+ledger; steps 6–9 dispatch, take results through the gates, and close out.
 
-```text
-restate → check → review mode → route → ticket → decompose
-        → dispatch → intake → zoom out → close out
-```
+<a href="docs/diagrams/command-loop.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/command-loop-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/command-loop-light.png">
+    <img alt="Autopilot command loop: plan steps 0–5, execute steps 6–9, with the ledger, workers, verifier, review panel, and supervisor gates" src="docs/assets/command-loop-light.png" width="100%">
+  </picture>
+</a>
 
 ### Architecture
 
-```mermaid
-flowchart TB
-    U[User request] --> O["/autopilot:orchestrate<br/>(sole dispatcher)"]
+<a href="docs/diagrams/architecture.html">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture-light.png">
+    <img alt="Autopilot architecture: the orchestrator dispatches briefs to native roles or the worker runner, results pass intake gates, the verifier, and adversarial review, then return to the orchestrator" src="docs/assets/architecture-light.png" width="100%">
+  </picture>
+</a>
 
-    subgraph plugin["Plugin package"]
-        SK["skills/<br/>setup · orchestrate + references"]
-        AG["agents/<br/>architect · engineer · senior-engineer · engineer-doc<br/>security-engineer · verifier · reviewer · supervisor"]
-        HK["hooks/<br/>guard-bash · brief-check · ledger-nudge<br/>register.tsx mod (Fable gate · /ledger)"]
-        WR["workers/<br/>autopilot-worker runner + presets"]
-    end
-
-    O --- SK
-    O --> AG
-    O --> WR
-    HK -.guards every session.-> O
-
-    WR --> EXT["External workers<br/>Codex · Grok · GPT · opencode · omp · MCP"]
-    EXT -. background run, wakes session .-> O
-
-    AG --> IN[Intake gates<br/>evidence required]
-    EXT --> IN
-    IN --> VF[Fresh-context verifier]
-    VF --> RV["Adversarial review<br/>(off · final · per-component)"]
-    RV --> O
-
-    subgraph state["Runtime state (gitignored)"]
-        G["~/.autopilot/<br/>config.jsonc · workers/"]
-        P["&lt;project&gt;/.autopilot/<br/>ledger · briefs · artifacts · lessons"]
-    end
-
-    O <--> P
-    O <--> G
-    O --> DL["DEVLOG.md<br/>(committed handover, if present)"]
-```
+Both diagrams have interactive versions with source links on every node:
+[architecture](docs/diagrams/architecture.html) and
+[command loop](docs/diagrams/command-loop.html). Download and open them in a browser;
+GitHub shows HTML files as source.
 
 ### Roles
 

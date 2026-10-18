@@ -1,0 +1,394 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "Autopilot Architecture",
+  "output": "docs/diagrams/architecture.html",
+  "quality_profile": "showcase",
+  "locale": "en",
+  "repository": {
+   "url": "https://github.com/sayre4ux/autopilot",
+   "provider": "github",
+   "link_mode": "web",
+   "revision": "dff7a40dcebb90a56581980d761922a40622b53a"
+  }
+ },
+ "components": [
+  {
+   "id": "state",
+   "type": "database",
+   "label": "Runtime state",
+   "sublabel": "~/.autopilot \u00b7 <project>/.autopilot",
+   "tag": "ledger \u00b7 briefs \u00b7 artifacts",
+   "pos": [
+    270,
+    40
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/SKILL.md",
+     "line": 126,
+     "end_line": 150,
+     "label": "ledger"
+    },
+    {
+     "path": "skills/orchestrate/SKILL.md",
+     "line": 76,
+     "end_line": 82,
+     "label": "config load"
+    }
+   ]
+  },
+  {
+   "id": "runner",
+   "type": "backend",
+   "label": "Worker runner",
+   "sublabel": "autopilot-worker run",
+   "tag": "timeout \u00b7 meta.json",
+   "pos": [
+    530,
+    40
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "sources": [
+    {
+     "path": "workers/autopilot-worker",
+     "line": 502,
+     "end_line": 645,
+     "label": "run"
+    },
+    {
+     "path": "workers/autopilot-worker",
+     "line": 112,
+     "end_line": 156,
+     "label": "callback"
+    }
+   ]
+  },
+  {
+   "id": "external",
+   "type": "external",
+   "label": "External workers",
+   "sublabel": "Codex \u00b7 Grok \u00b7 opencode \u00b7 omp \u00b7 MCP",
+   "pos": [
+    790,
+    40
+   ],
+   "size": [
+    210,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/references/workers.md",
+     "line": 1,
+     "end_line": 47
+    },
+    {
+     "path": "workers/presets/gpt-6-1-sol-cli.json"
+    }
+   ]
+  },
+  {
+   "id": "user",
+   "type": "external",
+   "label": "User request",
+   "sublabel": "job description",
+   "pos": [
+    40,
+    210
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/SKILL.md",
+     "line": 56,
+     "end_line": 74,
+     "label": "entry"
+    }
+   ]
+  },
+  {
+   "id": "orch",
+   "type": "frontend",
+   "label": "/autopilot:orchestrate",
+   "sublabel": "sole dispatcher \u00b7 10-step loop",
+   "tag": "plan \u00b7 route \u00b7 reconcile",
+   "pos": [
+    270,
+    210
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/SKILL.md",
+     "line": 7,
+     "end_line": 40
+    },
+    {
+     "path": "skills/orchestrate/references/command-loop.md",
+     "line": 158,
+     "end_line": 172,
+     "label": "loop"
+    }
+   ]
+  },
+  {
+   "id": "roles",
+   "type": "backend",
+   "label": "Native roles",
+   "sublabel": "8 agents \u00b7 sc or Agent tool",
+   "tag": "opus / fable aliases",
+   "pos": [
+    530,
+    210
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/references/roles.md",
+     "line": 9,
+     "end_line": 41
+    },
+    {
+     "path": "agents/engineer.md"
+    }
+   ]
+  },
+  {
+   "id": "intake",
+   "type": "security",
+   "label": "Intake gates",
+   "sublabel": "spot-check \u00b7 red-team \u00b7 sign-off",
+   "pos": [
+    790,
+    210
+   ],
+   "size": [
+    210,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/references/command-loop.md",
+     "line": 123,
+     "end_line": 137
+    }
+   ]
+  },
+  {
+   "id": "hooks",
+   "type": "security",
+   "label": "Hooks + mod",
+   "sublabel": "brief-check \u00b7 guard-bash \u00b7 Fable gate",
+   "tag": "fail-open \u00b7 advisory default",
+   "pos": [
+    530,
+    380
+   ],
+   "size": [
+    210,
+    64
+   ],
+   "sources": [
+    {
+     "path": "hooks/hooks.json",
+     "line": 1,
+     "end_line": 38
+    },
+    {
+     "path": "hooks/register.tsx",
+     "line": 198,
+     "end_line": 238,
+     "label": "Fable gate"
+    }
+   ]
+  },
+  {
+   "id": "verifier",
+   "type": "security",
+   "label": "Fresh-context verifier",
+   "sublabel": "CONFIRMED / REFUTED",
+   "pos": [
+    790,
+    380
+   ],
+   "size": [
+    210,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/references/judgment.md",
+     "line": 62,
+     "end_line": 82,
+     "label": "R7"
+    },
+    {
+     "path": "agents/verifier.md",
+     "line": 1,
+     "end_line": 12
+    }
+   ]
+  },
+  {
+   "id": "review",
+   "type": "security",
+   "label": "Adversarial review",
+   "sublabel": "off \u00b7 final \u00b7 per-component",
+   "tag": "2+ reviewers",
+   "pos": [
+    1080,
+    380
+   ],
+   "size": [
+    160,
+    64
+   ],
+   "sources": [
+    {
+     "path": "skills/orchestrate/references/review-cycle.md",
+     "line": 6,
+     "end_line": 58
+    },
+    {
+     "path": "agents/reviewer.md",
+     "line": 1,
+     "end_line": 12
+    }
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "job",
+   "from": "user",
+   "to": "orch",
+   "label": "job",
+   "variant": "emphasis"
+  },
+  {
+   "id": "ledger",
+   "from": "orch",
+   "to": "state",
+   "label": "ledger first"
+  },
+  {
+   "id": "native-brief",
+   "from": "orch",
+   "to": "roles",
+   "label": "brief",
+   "variant": "emphasis"
+  },
+  {
+   "id": "cli-brief",
+   "from": "orch",
+   "to": "runner",
+   "label": "CLI / MCP brief"
+  },
+  {
+   "id": "exec",
+   "from": "runner",
+   "to": "external",
+   "label": "exec"
+  },
+  {
+   "id": "ext-result",
+   "from": "external",
+   "to": "intake",
+   "label": "output + meta",
+   "variant": "dashed"
+  },
+  {
+   "id": "native-result",
+   "from": "roles",
+   "to": "intake",
+   "label": "result",
+   "variant": "emphasis"
+  },
+  {
+   "id": "guard",
+   "from": "hooks",
+   "to": "roles",
+   "label": "guards spawn",
+   "variant": "security"
+  },
+  {
+   "id": "r7",
+   "from": "intake",
+   "to": "verifier",
+   "label": "R7 fires",
+   "variant": "security"
+  },
+  {
+   "id": "confirmed",
+   "from": "verifier",
+   "to": "review",
+   "label": "CONFIRMED",
+   "variant": "security"
+  },
+  {
+   "id": "verdict",
+   "from": "review",
+   "to": "orch",
+   "label": "findings \u2192 reconcile",
+   "variant": "dashed",
+   "fromSide": "bottom",
+   "toSide": "bottom"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "violet",
+   "title": "Orchestrator",
+   "items": [
+    "Only dispatcher; agents never spawn agents",
+    "Ledger row written before non-trivial work",
+    "Retries capped at three rounds"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "Workers",
+   "items": [
+    "Native: architect, engineer, senior-engineer, engineer-doc, security-engineer, verifier, reviewer, supervisor",
+    "External runs return through the same intake",
+    "Fails soft: no external worker is load-bearing"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "Gates",
+   "items": [
+    "Verifier always runs for external-worker code",
+    "Review is additive and never load-bearing",
+    "Supervisor (fable) checks plan, milestones, close"
+   ]
+  },
+  {
+   "dot": "amber",
+   "title": "State",
+   "items": [
+    "~/.autopilot: config.jsonc, worker registry",
+    ".autopilot/: ledger, briefs, artifacts, lessons",
+    "DEVLOG.md updated at close-out when present"
+   ]
+  }
+ ]
+}
