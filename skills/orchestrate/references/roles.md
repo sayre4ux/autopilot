@@ -28,7 +28,8 @@ while active (omitted inherits the session). Per-dispatch effort variance comes 
 sc path's `--reasoning` or a distinct definition, never an Agent-tool argument — which is why
 `engineer` and `senior-engineer` are two definitions rather than one role at two efforts.
 Aliases are `opus`, `fable`, `sonnet`, or `haiku`, never dated identifiers. On Claude Code
-2.1.283 `opus` resolves to Claude Opus 5.5 and `fable` to Claude Fable 5.1.
+2.1.283 `opus` resolves to Claude Opus 5.5 and `fable` to Claude Fable 5.1; on 2.1.306
+`haiku` resolves to Claude Haiku 5.5.
 
 When sc-managed orchestration is detected, dispatch these roles as labeled sc agents per
 `dispatch.md` instead of Agent-tool subagents. The brief's `<system>` block replaces agent
@@ -50,7 +51,7 @@ same thing across aliases:
 | `opus` | Claude Opus 5.5 | `medium` |
 | `fable` | Claude Fable 5.1 | `high` |
 | `sonnet` | Claude Sonnet 5.5 | `high` |
-| `haiku` | Claude Haiku 4.5 | not supported |
+| `haiku` | Claude Haiku 5.5 | `medium` |
 
 Every shipped role sets `effort` explicitly rather than inheriting, so a role behaves the
 same on a host whose alias resolves elsewhere. So:
@@ -66,6 +67,14 @@ Roles stay on `opus` even where a cheaper model posts comparable benchmark score
 Opus 5.5 reads cache at 0.05x base ($0.20/MTok) against the standard 0.1x. In a long agentic
 loop with a stable prefix, cache reads dominate the input bill, so per-token sticker price
 understates the gap. Move a role off `opus` only with an eval on the actual workload.
+
+That argument holds against `sonnet`, whose cache reads also cost $0.20/MTok, but not against
+`haiku`: Claude Haiku 5.5 costs $0.10 / $0.50 per MTok for prompts up to 100K tokens ($0.50 /
+$2.50 above), with cache reads at $0.01/MTok. It is cheaper on every line of the bill, so what
+keeps a role off `haiku` is capability, and only an eval settles that. Its shipped use is the
+user-level Explore override (`templates/Explore.md`, `effort: low`): broad read-only search
+where a miss costs one more search. Haiku 5.5 runs safety classifiers with no server-side
+fallback, so a refusal ends that dispatch; route the retry to `opus`.
 
 Route by what a defect would cost, not by task size: a small change to a public interface
 goes to `senior-engineer`; a large mechanical change goes to `engineer`.

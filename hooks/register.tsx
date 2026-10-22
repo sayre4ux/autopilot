@@ -1,8 +1,25 @@
-import { read } from 'claude-code'
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register } from 'claude-code'
 
-import type { LedgerStatus, LedgerView } from '../types'
-import { NOTES_INDENT, layoutColumns, parseLedger, problemLine, statusLine, summaryText, tallyLine, truncate } from './ledger'
+import type { LedgerRow, LedgerStatus, LedgerView } from '../types'
+import {
+  NOTES_INDENT,
+  NOTE_LINES,
+  barCells,
+  compactModel,
+  displayWidth,
+  firstWord,
+  layoutColumns,
+  parseLedger,
+  problemLine,
+  progressText,
+  settledLine,
+  splitRows,
+  statusLine,
+  summaryText,
+  truncate,
+  wrapLines,
+} from './ledger'
 
 const SECURITY_ENGINEER = 'autopilot:security-engineer'
 const FABLE = /fable/i
@@ -36,6 +53,10 @@ const COMMAND = 'ledger'
 const PANE = 'autopilot-ledger'
 const TITLE = 'Autopilot ledger'
 const LEDGER = { plugin: 'autopilot', key: 'ledger' } as const
+const SHOW_SETTLED = atom({ plugin: 'autopilot', key: 'showSettled' } as const, false)
+const LABEL_WIDTH = 8
+const BAR_MAX = 20
+const BAR_MIN = 4
 
 const MARKERS: Record<LedgerStatus, string> = {
   open: '○',
@@ -114,16 +135,33 @@ function registerLedgerView(on: On) {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // DECISION: the pane leads with the rows still in play (active, awaiting, blocked, open)
+  // and folds done and dropped rows into one line that `d` expands. With nothing in play
+  // it lists the settled rows outright. Notes wrap to NOTE_LINES lines instead of one.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const view = await read($, LEDGER)
-    const width = e.props.bodyColumns
+    const showSettled = await read($, SHOW_SETTLED)
+    const width = Math.max(1, Math.floor(e.props.bodyColumns))
+    const rule = <Text dimColor>{'─'.repeat(width)}</Text>
+
+    const rows = view?.ledger?.rows ?? []
+    const { live, settled } = splitRows(rows)
+    const canFold = live.length > 0 && settled.length > 0
 
     // DECISION: the buttons lead the pane so a long ledger never scrolls them away.
     const buttons = (
       <Box flexDirection="row" gap={1}>
         <Button key="refresh" label="Refresh" hotkey="r" onPress={() => refresh($, true)} />
         <Button key="close" label="Close" hotkey="c" role="dismiss" onPress={() => $.ui.close({ id: PANE })} />
+        {canFold && (
+          <Button
+            key="settled"
+            label={showSettled ? 'Hide done' : `Show done (${settled.length})`}
+            hotkey="d"
+            onPress={() => update($, SHOW_SETTLED, isShown => !isShown)}
+          />
+        )}
       </Box>
     )
 
@@ -144,7 +182,57 @@ function registerLedgerView(on: On) {
       )
     }
 
-    const { job, vehicle, callback, rows } = view.ledger
+    const { job, vehicle, review } = view.ledger
+    const valueWidth = Math.max(1, width - LABEL_WIDTH)
+    const lines = (key: string, texts: string[], style: TextStyle = {}) =>
+      texts.map((text, index) => (
+        <Box key={`${key}-${index}`}>
+          <Text wrap="truncate" {...style}>
+            {text}
+          </Text>
+        </Box>
+      ))
+    const field = (label: string, value: string, maxLines: number) => (
+      <Box key={`field-${label}`} flexDirection="row">
+        <Box width={LABEL_WIDTH} flexShrink={0}>
+          <Text dimColor>{label}</Text>
+        </Box>
+        <Box flexDirection="column">{lines(label, wrapLines(value, valueWidth, maxLines))}</Box>
+      </Box>
+    )
+    // DECISION: Callback is plumbing for the orchestrator and stays out of the pane;
+    // Vehicle and Review mode show as their first word on one "Run" line.
+    const run = [
+      review === undefined ? '' : `review ${firstWord(review)}`,
+      vehicle === undefined ? '' : `via ${firstWord(vehicle)}`,
+    ].filter(part => part !== '')
+
+    // DECISION: the bar sits before the counts while both fit, else on a line of its own.
+    const progress = progressText(view.ledger)
+    const besideWidth = Math.min(BAR_MAX, width - displayWidth(progress.text) - 1)
+    const isBeside = besideWidth >= BAR_MIN
+    const bar = barCells(progress.done, progress.total, isBeside ? besideWidth : Math.min(BAR_MAX, width))
+    const barCellsDrawn = (
+      <Box flexDirection="row" flexShrink={0}>
+        {bar.filled > 0 && <Text color="green">{'█'.repeat(bar.filled)}</Text>}
+        {bar.empty > 0 && <Text dimColor>{'░'.repeat(bar.empty)}</Text>}
+      </Box>
+    )
+    const progressLine =
+      rows.length === 0 ? (
+        <Text dimColor>No tasks yet.</Text>
+      ) : isBeside ? (
+        <Box flexDirection="row">
+          {barCellsDrawn}
+          <Text wrap="truncate"> {progress.text}</Text>
+        </Box>
+      ) : (
+        <Box flexDirection="column">
+          {barCellsDrawn}
+          <Text wrap="truncate">{truncate(progress.text, width)}</Text>
+        </Box>
+      )
+
     const cols = layoutColumns(rows, width)
     const cell = (cellWidth: number, text: string, style: TextStyle = {}) =>
       cellWidth > 0 && (
@@ -154,42 +242,60 @@ function registerLedgerView(on: On) {
           </Text>
         </Box>
       )
-    const inlineNotes = (text: string, style: TextStyle = {}) => !cols.notesBelow && cell(cols.notes, text, style)
+    const rowOf = (row: LedgerRow, key: string, isSettled: boolean, noteLines: number) => {
+      const dim: TextStyle = isSettled ? { dimColor: true } : {}
+      const notes = cols.notes > 0 ? wrapLines(row.notes, cols.notes, noteLines) : []
+      return (
+        <Box key={key} flexDirection="column">
+          <Box flexDirection="row" gap={1}>
+            {cell(cols.taskId, row.taskId, isSettled ? dim : { bold: true })}
+            {cell(cols.status, `${MARKERS[row.status]} ${row.status}`, statusStyle(row.status))}
+            {cell(cols.role, row.role, dim)}
+            {cell(cols.modelUsed, compactModel(row.modelUsed), dim)}
+            {!cols.notesBelow && notes.length > 0 && (
+              <Box width={cols.notes} flexShrink={0} flexDirection="column">
+                {lines(`${key}-notes`, notes, { dimColor: true })}
+              </Box>
+            )}
+          </Box>
+          {cols.notesBelow && notes.length > 0 && (
+            <Box paddingLeft={NOTES_INDENT} flexDirection="column">
+              {lines(`${key}-notes`, notes, { dimColor: true })}
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
+    const listed = live.length === 0 ? settled : live
+    const isFolded = canFold && !showSettled
 
     return (
       <Box flexDirection="column">
         {buttons}
-        {job !== undefined && <Text>Job: {job}</Text>}
-        {vehicle !== undefined && <Text>Vehicle: {vehicle}</Text>}
-        {callback !== undefined && <Text>Callback: {callback}</Text>}
-        <Text dimColor>{tallyLine(view.ledger)}</Text>
+        {job !== undefined && field('Job', job, 2)}
+        {run.length > 0 && field('Run', run.join(' · '), 1)}
+        {progressLine}
         {rows.length > 0 && (
-          <Box flexDirection="row" gap={1}>
-            {cell(cols.taskId, 'Task ID', { bold: true })}
-            {cell(cols.status, 'Status', { bold: true })}
-            {cell(cols.role, 'Role', { bold: true })}
-            {cell(cols.modelUsed, 'Model', { bold: true })}
-            {inlineNotes('Notes', { bold: true })}
+          <Box flexDirection="column" marginTop={1}>
+            <Box flexDirection="row" gap={1}>
+              {cell(cols.taskId, 'ID', { bold: true })}
+              {cell(cols.status, 'Status', { bold: true })}
+              {cell(cols.role, 'Role', { bold: true })}
+              {cell(cols.modelUsed, 'Model', { bold: true })}
+              {!cols.notesBelow && cell(cols.notes, 'Notes', { bold: true })}
+            </Box>
+            {rule}
+            {listed.map((row, index) => rowOf(row, `row-${index}`, live.length === 0, NOTE_LINES))}
+            {canFold && rule}
+            {isFolded && (
+              <Text dimColor wrap="truncate">
+                {truncate(settledLine(settled), width)}
+              </Text>
+            )}
+            {canFold && showSettled && settled.map((row, index) => rowOf(row, `settled-${index}`, true, 1))}
           </Box>
         )}
-        {rows.map((row, index) => (
-          <Box key={`row-${index}`} flexDirection="column">
-            <Box flexDirection="row" gap={1}>
-              {cell(cols.taskId, row.taskId)}
-              {cell(cols.status, `${MARKERS[row.status]} ${row.status}`, statusStyle(row.status))}
-              {cell(cols.role, row.role)}
-              {cell(cols.modelUsed, row.modelUsed)}
-              {inlineNotes(row.notes, { dimColor: true })}
-            </Box>
-            {cols.notesBelow && row.notes !== '' && cols.notes > 0 && (
-              <Box paddingLeft={NOTES_INDENT}>
-                <Text dimColor wrap="truncate">
-                  {truncate(row.notes, cols.notes)}
-                </Text>
-              </Box>
-            )}
-          </Box>
-        ))}
       </Box>
     )
   })

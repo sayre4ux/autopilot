@@ -12,7 +12,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/sayre4ux/autopilot/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/actions/workflows/ci.yml)
 [![Claude Code plugin](https://img.shields.io/badge/claude%20code-plugin-8b5cf6?style=flat-square&labelColor=1c1b22)](https://docs.claude.com/en/docs/claude-code/overview)
-[![Version](https://img.shields.io/badge/version-0.3.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.3.1-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
 [Wiki](https://sayre4ux.github.io/autopilot/) · [Install](#install) · [How it works](#how-it-works) · [Roles](#roles) · [Workers](#workers)

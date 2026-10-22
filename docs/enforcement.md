@@ -28,9 +28,12 @@ The mod:
 - **Nested-spawn backstop.** A spawn whose parent is an `autopilot:*` agent is denied in strict
   and shown as a toast in advisory. No autopilot role lists the Agent tool, so this fires only
   for a misconfigured role; it does not catch a general-purpose agent carrying a role brief.
-- **`/ledger`.** A read-only pane showing `.autopilot/ledger.md`: header lines and the task
-  table with status markers, Refresh and Close buttons, refreshed at the end of each main-loop
-  turn while open. The status line reads `autopilot: N active · M awaiting`. In `claude -p` or
+- **`/ledger`.** A read-only pane showing `.autopilot/ledger.md`: the job, review mode and
+  vehicle, a progress bar, then the rows still in play (active, awaiting, blocked, open) with
+  their notes wrapped to three lines. Done and dropped rows fold into one line; `d` (or the
+  Show done button) lists them. Model shows as alias and effort (`opus·high`), and widths
+  count CJK characters as two cells. Refresh (`r`) and Close (`c`) buttons; the pane refreshes
+  at the end of each main-loop turn while open. The status line reads `autopilot: N active · M awaiting`. In `claude -p` or
   an SDK host with no surface it answers with a text summary. It never writes a file and works
   even with enforcement `off`. Command names cannot contain `:`, so it is `/ledger` rather than
   `/autopilot:ledger` and shares the global command namespace.

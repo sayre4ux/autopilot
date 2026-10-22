@@ -12,6 +12,7 @@ export type Ledger = {
   job?: string
   vehicle?: string
   callback?: string
+  review?: string
   rows: LedgerRow[]
 }
 
@@ -24,6 +25,7 @@ export type LedgerView = {
 
 declare module 'claude-code' {
   interface PluginState {
-    autopilot: { ledger: LedgerView }
+    // showSettled: whether the pane lists done and dropped rows or one summary line.
+    autopilot: { ledger: LedgerView; showSettled: boolean }
   }
 }

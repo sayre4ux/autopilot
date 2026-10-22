@@ -1,7 +1,21 @@
 import type { On, RenderPropsOf, RenderSurface } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { layoutColumns, parseLedger, statusLine, summaryText, truncate } from './ledger'
+import {
+  barCells,
+  compactModel,
+  displayWidth,
+  firstWord,
+  layoutColumns,
+  parseLedger,
+  progressText,
+  settledLine,
+  splitRows,
+  statusLine,
+  summaryText,
+  truncate,
+  wrapLines,
+} from './ledger'
 
 const ROOT = '/work/project'
 const PATH = `${ROOT}/.autopilot/ledger.md`
@@ -119,6 +133,7 @@ describe('parseLedger', () => {
     expect(ledger.job).toBe('add a mod (function hooks) alongside the autopilot plugin. Baseline 2a3ba5d.')
     expect(ledger.vehicle).toStartWith('agent-tool (sc absent from PATH;')
     expect(ledger.callback).toBe('none (harness notification)')
+    expect(ledger.review).toBe('off (default). User checks in before each major step.')
     expect(ledger.rows.map(row => [row.taskId, row.status])).toEqual([
       ['MOD', 'done'],
       ['PYHOOK', 'active'],
@@ -193,11 +208,75 @@ describe('status line and summary', () => {
     expect(summaryText({ path: PATH, ledger: null, problem: 'unreadable' })).toBe(`Cannot read the ledger at ${PATH}`)
   })
 
-  test('truncates by code point with an ellipsis', () => {
+  test('truncates by terminal cells with an ellipsis', () => {
     expect(truncate('abcdef', 6)).toBe('abcdef')
     expect(truncate('abcdef', 4)).toBe('abc…')
     expect(truncate('ab', 0)).toBe('')
-    expect(truncate('😀😀😀', 2)).toBe('😀…')
+    expect(truncate('😀😀😀', 3)).toBe('😀…')
+    expect(truncate('設計文件', 8)).toBe('設計文件')
+    expect(truncate('設計文件', 5)).toBe('設計…')
+    expect(truncate('設計文件', 6)).toBe('設計…')
+    expect(displayWidth('設計 docs')).toBe(9)
+    expect(displayWidth('e\u0301')).toBe(1)
+  })
+
+  test('wraps words, CJK and long words inside the width', () => {
+    expect(wrapLines('waiting on user: which endpoint owns the conflict log?', 20, 3)).toEqual([
+      'waiting on user:',
+      'which endpoint owns',
+      'the conflict log?',
+    ])
+    const cjk = wrapLines('需要 token 輪換策略先可以繼續；blocked on API decision', 16, 3)
+    expect(cjk.every(line => displayWidth(line) <= 16)).toBe(true)
+    expect(cjk[0]).toBe('需要 token 輪換')
+    expect(wrapLines('n'.repeat(25), 10, 3)).toEqual(['nnnnnnnnnn', 'nnnnnnnnnn', 'nnnnn'])
+    const cut = wrapLines('n'.repeat(40), 10, 3)
+    expect(cut).toHaveLength(3)
+    expect(cut[2]).toBe('nnnnnnnnn…')
+    expect(wrapLines('one two three four five six', 9, 2)).toEqual(['one two', 'three fo…'])
+    expect(wrapLines('', 10, 3)).toEqual([])
+    expect(wrapLines('abc', 0, 3)).toEqual([])
+  })
+
+  test('compacts the model to alias and effort', () => {
+    expect(compactModel('opus (frontmatter high)')).toBe('opus·high')
+    expect(compactModel('sonnet (medium)')).toBe('sonnet·medium')
+    expect(compactModel('opus (session)')).toBe('opus')
+    expect(compactModel('opus-5[1m]')).toBe('opus-5[1m]')
+    expect(compactModel('-')).toBe('-')
+    expect(firstWord('agent-tool (sc absent from PATH)')).toBe('agent-tool')
+    expect(firstWord('off (default). User checks in')).toBe('off')
+  })
+
+  test('puts live rows first and folds the settled ones', () => {
+    const rows = parseLedger(SAMPLE).rows
+    const { live, settled } = splitRows(rows)
+    expect(live.map(row => row.taskId)).toEqual(['PYHOOK', 'PANE', 'CI', 'VERIFY', 'SUPERVISE'])
+    expect(settled.map(row => row.taskId)).toEqual(['MOD'])
+    expect(settledLine(settled)).toBe('✓ 1 done: MOD')
+    const mixed = parseLedger(`| Task ID | Status |
+|---|---|
+| O | open |
+| B | blocked |
+| D | dropped |
+| W | awaiting |
+| A | active |
+| X | done |`).rows
+    expect(splitRows(mixed).live.map(row => row.taskId)).toEqual(['A', 'W', 'B', 'O'])
+    expect(settledLine(splitRows(mixed).settled)).toBe('✓ 1 done: X  ✗ 1 dropped: D')
+  })
+
+  test('counts progress without dropped tasks and sizes the bar', () => {
+    const ledger = parseLedger(`| Task ID | Status |
+|---|---|
+| A | done |
+| B | active |
+| C | dropped |
+| D | blocked |`)
+    expect(progressText(ledger)).toEqual({ done: 1, total: 3, text: '1/3 done · 1 active · 1 blocked' })
+    expect(barCells(1, 3, 12)).toEqual({ filled: 4, empty: 8 })
+    expect(barCells(0, 0, 10)).toEqual({ filled: 0, empty: 10 })
+    expect(barCells(5, 5, 0)).toEqual({ filled: 0, empty: 0 })
   })
 
   test('lays the columns out inside the body at any width', () => {
@@ -246,7 +325,7 @@ describe('the /ledger command', () => {
     expect(result.text).toBe('Autopilot ledger pane opened.')
     expect(seen.opens).toEqual([{ id: PANE, title: 'Autopilot ledger' }])
     const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(120) })
-    expect(await ui.find({ type: 'Text', text: /^Job: add a mod/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^add a mod/ })).toBeDefined()
     await ui.unmount()
     expect(seen.writes).toBe(0)
   })
@@ -273,27 +352,57 @@ describe('the /ledger command', () => {
 })
 
 describe('the ledger pane', () => {
-  test('draws the header, the rows and both buttons on every surface', async ($, on) => {
+  test('draws the header, the live rows and the buttons on every surface', async ($, on) => {
     world(on, { ledger: SAMPLE })
     await $.command.run(RUN)
     for (const surface of DRAWING) {
       const ui = await $.ui.mount({ plugin: 'autopilot', surface, component: 'Pane', requestId: PANE, props: paneProps(140) })
-      expect(await ui.find({ type: 'Text', text: /^Job: add a mod/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: /^Vehicle: agent-tool/ })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: 'Callback: none (harness notification)' })).toBeDefined()
-      expect(await ui.find({ type: 'Text', text: 'SUPERVISE' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^Job$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^add a mod/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'review off · via agent-tool' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /Callback|harness notification/ })).toBeUndefined()
+      expect(await ui.find({ type: 'Text', text: /1\/6 done · 2 active · 3 open$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: /^SUPERVISE$/ })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'opus·medium' })).toBeDefined()
       expect((await ui.find({ type: 'Button', key: 'close' }))?.props.role).toBe('dismiss')
       expect(await ui.find({ type: 'Button', key: 'refresh' })).toBeDefined()
 
       const active = await ui.find({ type: 'Text', text: '● active' })
-      const done = await ui.find({ type: 'Text', text: '✓ done' })
       expect(active?.props).toMatchObject({ color: 'green', bold: true })
-      expect(done?.props).toMatchObject({ dimColor: true })
+      // The done row is folded into one line until `d` shows it.
+      expect(await ui.find({ type: 'Text', text: /^MOD$/ })).toBeUndefined()
+      expect(await ui.find({ type: 'Text', text: '✓ 1 done: MOD' })).toBeDefined()
+      expect((await ui.find({ type: 'Button', key: 'settled' }))?.props).toMatchObject({ label: 'Show done (1)', hotkey: 'd' })
       await ui.unmount()
     }
   })
 
-  test('truncates notes to the body width', async ($, on) => {
+  test('the settled button shows and hides the done rows', async ($, on) => {
+    world(on, { ledger: SAMPLE })
+    await $.command.run(RUN)
+    const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(120) })
+    await ui.press({ key: 'settled' })
+    expect(await ui.find({ type: 'Text', text: /^MOD$/ })).toMatchObject({ props: { dimColor: true } })
+    expect((await ui.find({ type: 'Text', text: '✓ done' }))?.props).toMatchObject({ dimColor: true })
+    expect(await ui.find({ type: 'Text', text: '✓ 1 done: MOD' })).toBeUndefined()
+    expect((await ui.find({ type: 'Button', key: 'settled' }))?.props.label).toBe('Hide done')
+    await ui.press({ key: 'settled' })
+    expect(await ui.find({ type: 'Text', text: /^MOD$/ })).toBeUndefined()
+    await ui.unmount()
+  })
+
+  test('lists settled rows outright when nothing is in play', async ($, on) => {
+    world(on, { ledger: `| Task ID | Role | Status | Model Used | Notes |\n|---|---|---|---|---|\n| A | engineer | done | opus | shipped |\n| B | engineer | dropped | - | - |\n` })
+    await $.command.run(RUN)
+    const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(100) })
+    expect(await ui.find({ type: 'Text', text: /^A$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^B$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', key: 'settled' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /1\/1 done$/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('wraps notes to three lines inside the body width', async ($, on) => {
     const long = 'n'.repeat(300)
     world(on, {
       ledger: `| Task ID | Role | Status | Model Used | Notes |\n|---|---|---|---|---|\n| A | engineer | active | opus | ${long} |\n`,
@@ -301,11 +410,24 @@ describe('the ledger pane', () => {
     await $.command.run(RUN)
     for (const width of [36, 100]) {
       const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(width) })
-      const notes = await ui.find({ type: 'Text', text: /^n+…$/ })
-      expect(notes).toBeDefined()
-      expect(Array.from(notes?.text ?? '').length).toBeLessThan(width)
+      const notes = await ui.findAll({ type: 'Text', text: /^n+…?$/ })
+      expect(notes).toHaveLength(3)
+      expect(notes[2]?.text).toEndWith('…')
+      for (const line of notes) expect(Array.from(line.text ?? '').length).toBeLessThan(width)
       await ui.unmount()
     }
+  })
+
+  test('keeps CJK notes inside the body width', async ($, on) => {
+    world(on, {
+      ledger: `| Task ID | Role | Status | Model Used | Notes |\n|---|---|---|---|---|\n| 同步 | engineer | blocked | opus | 需要 token 輪換策略先可以繼續；blocked on API decision |\n`,
+    })
+    await $.command.run(RUN)
+    const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(40) })
+    const texts = await ui.findAll({ type: 'Text' })
+    for (const text of texts) expect(displayWidth(text.text ?? ''), text.text).toBeLessThan(41)
+    expect(await ui.find({ type: 'Text', text: '同步' })).toBeDefined()
+    await ui.unmount()
   })
 
   test('shows one line when the ledger is missing', async ($, on) => {
@@ -361,7 +483,7 @@ describe('turn.complete', () => {
     expect(seen.statuses.at(-1)).toBe('autopilot: 2 active · 0 awaiting')
     const ui = await $.ui.mount({ plugin: 'autopilot', surface: 'terminal', component: 'Pane', requestId: PANE, props: paneProps(120) })
     expect(await ui.find({ type: 'Text', text: 'PYHOOK' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: 'B' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^B$/ })).toBeDefined()
     await ui.unmount()
   })
 
