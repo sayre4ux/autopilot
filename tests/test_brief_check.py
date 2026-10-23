@@ -55,6 +55,7 @@ MARKDOWN_EMPTY_CRITERIA = """# Task T-009
 ENFORCED = [
     "autopilot:architect",
     "autopilot:engineer",
+    "autopilot:engineer-lite",
     "autopilot:senior-engineer",
     "autopilot:engineer-doc",
     "autopilot:security-engineer",

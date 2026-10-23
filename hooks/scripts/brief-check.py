@@ -21,6 +21,7 @@ from typing import Any
 ENFORCED_TYPES = {
     "autopilot:architect",
     "autopilot:engineer",
+    "autopilot:engineer-lite",
     "autopilot:senior-engineer",
     "autopilot:engineer-doc",
     "autopilot:security-engineer",

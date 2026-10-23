@@ -3,7 +3,7 @@
 ## Purpose
 
 Autopilot packages a complete orchestration process as one Claude Code plugin. It provides
-an auto-invokable orchestration skill, explicit-only setup skill, eight native roles, optional
+an auto-invokable orchestration skill, explicit-only setup skill, nine native roles, optional
 enforcement hooks (Python command hooks plus a function-hooks mod), and a registry-driven
 worker layer. User and project configuration stays
 outside the installed plugin.
@@ -41,6 +41,7 @@ for approval, backs up user settings once, and applies only approved key/file ch
 |---|---|---|
 | architect | opus / high | Designs and arbitrates; no production code |
 | engineer | opus / medium | Normal code, scripts, data |
+| engineer-lite | haiku / medium | Fully specified, self-contained code with an acceptance command |
 | senior-engineer | opus / high | Code where a defect is expensive |
 | engineer-doc | opus / medium | Visual/doc work with render inspection |
 | security-engineer | opus / high | Security-sensitive work |
@@ -125,7 +126,7 @@ round three escalates to architect arbitration.
 The Python command hooks run on any build that runs command hooks, `claude -p` included.
 The Bash guard is fail-closed only for a positive catastrophic-pattern match in strict mode.
 Advisory mode turns the same match into a permission prompt, so a person decides. The brief
-check, on Agent dispatches of architect, engineer, senior-engineer, engineer-doc, and
+check, on Agent dispatches of architect, engineer, engineer-lite, senior-engineer, engineer-doc, and
 security-engineer, looks for non-empty acceptance criteria in the inline `<dispatch>` block
 or the `.md` brief the prompt names; strict denies a brief without them, advisory adds a note
 to the model's context, and an unreadable brief is not judged. The ledger nudge is advisory.

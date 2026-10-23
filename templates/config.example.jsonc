@@ -7,7 +7,7 @@
   // sonnet (Sonnet 5.5) high, haiku (Haiku 5.5) medium. Set effort explicitly; an
   // omitted value does not mean the same thing across aliases or across hosts.
   // Effort policy (Opus 5.5): medium for one-shot work where a routine defect is caught at
-  // intake (engineer, engineer-doc); high where a miss is expensive or propagates (architect,
+  // intake (engineer, engineer-lite, engineer-doc); high where a miss is expensive or propagates (architect,
   // senior-engineer, security-engineer, verifier, reviewer). xhigh/max only behind an eval.
   // The supervisor runs on fable at high and is called at gates only (R8 in judgment.md).
   // effort is a subagent frontmatter field (values low|medium|high|xhigh|max, model-
@@ -17,6 +17,7 @@
   "roles": {
     "architect":         { "model": "opus",  "effort": "high"   },
     "engineer":          { "model": "opus",  "effort": "medium" },
+    "engineer-lite":     { "model": "haiku", "effort": "medium" },
     "senior-engineer":   { "model": "opus",  "effort": "high"   },
     "engineer-doc":      { "model": "opus",  "effort": "medium" },
     "security-engineer": { "model": "opus",  "effort": "high"   },

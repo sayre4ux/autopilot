@@ -10,11 +10,11 @@ Command hooks:
   denies a positive match; advisory mode turns it into a permission prompt with the reason, so
   a person sees it before it runs.
 - The brief check runs on Agent-tool dispatches of `autopilot:architect`, `engineer`,
-  `senior-engineer`, `engineer-doc`, and `security-engineer`. It looks for a non-empty
-  `<acceptance_criteria>` block, or a markdown "Acceptance criteria" heading with content, in
-  the inline `<dispatch>` block or in the `.md` brief path(s) named in the prompt. Advisory
-  mode adds a note to the model's context; strict mode denies the dispatch. A brief it cannot
-  read is not judged. Reviewer, verifier, and supervisor dispatches are exempt.
+  `engineer-lite`, `senior-engineer`, `engineer-doc`, and `security-engineer`. It looks for a
+  non-empty `<acceptance_criteria>` block, or a markdown "Acceptance criteria" heading with
+  content, in the inline `<dispatch>` block or in the `.md` brief path(s) named in the prompt.
+  Advisory mode adds a note to the model's context; strict mode denies the dispatch. A brief it
+  cannot read is not judged. Reviewer, verifier, and supervisor dispatches are exempt.
 - The Stop hook shows a message when the ledger still has active/open rows. The shipped
   ledger has no session column, so every such row counts. Only when this session's id appears
   in the ledger does it narrow to the rows carrying that id.

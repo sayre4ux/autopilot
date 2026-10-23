@@ -143,7 +143,8 @@ should be aware that `autopilot-worker reset` executes directly. The subcommand 
   tool's 10-minute ceiling, otherwise with `--detach --callback` (sc address resolved) or as a
   Bash `run_in_background` task (persistent session), per `dispatch.md`.
 - Subagent: the record's `subagentType` must name a plugin role as
-  `autopilot:architect`, `autopilot:engineer`, `autopilot:senior-engineer`,
+  `autopilot:architect`, `autopilot:engineer`, `autopilot:engineer-lite`,
+  `autopilot:senior-engineer`,
   `autopilot:engineer-doc`, `autopilot:security-engineer`, `autopilot:verifier`,
   `autopilot:reviewer`, or `autopilot:supervisor`; pass that
   exact value to the Agent tool as `subagent_type`, applying overlay-resolved model/effort

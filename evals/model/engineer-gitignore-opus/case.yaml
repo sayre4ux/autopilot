@@ -1,0 +1,32 @@
+schema_version: "1.0"
+name: engineer-gitignore-opus
+description: "gitignore matcher dispatched to the engineer role on opus at effort medium; graded by git itself via a hidden checker."
+tags: [model]
+runs: 5
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 20
+  timeout_seconds: 1500
+  allowed_tools: [Agent, Read, Write, Edit, Bash, Glob, Grep]
+  prompt: "Dispatch the autopilot:engineer agent (Agent tool, subagent_type \"autopilot:engineer\"; do not pass a model) with exactly the brief below, then wait for its report. Do not write, edit, or fix any code yourself, and dispatch only once.\n\nBrief: In the current directory, write `gitignore_match.py` exposing `is_ignored(gitignore: str, path: str) -> bool`. `gitignore` is the full text of a single `.gitignore` at the repository root; `path` is a file path relative to that root, using `/` separators. Return True exactly when git would treat that file as ignored by that `.gitignore`, following gitignore(5) semantics. Use the Python standard library only: no subprocess, no calls to git, no third-party packages such as pathspec. Also write `test_gitignore_match.py` with pytest tests, run them, and include the output.\n\nAfter the agent reports, run this command once from the current directory, and do not share its contents with the agent:\n\npython3 \"$HOME/.eval-check/check_gitignore.py\" > check_result.txt 2>&1\n\nThen reply with the agent's summary and the last two lines of check_result.txt."
+graders:
+  - name: dispatched
+    type: tool_used
+    tool: Agent
+    input_match: "\"subagent_type\"\\s*:\\s*\"autopilot:engineer\""
+    arm: with-only
+  - name: module-file
+    type: file_exists
+    path: '**/gitignore_match.py'
+  - name: no-shortcuts
+    type: regex
+    target: {source: file, path: gitignore_match.py}
+    pattern: '(import\s+subprocess|from\s+subprocess|import\s+pathspec|from\s+pathspec|os\.system|os\.popen)'
+    match: not_contains
+  - name: matches-git
+    type: regex
+    weight: 3
+    target: {source: file, path: check_result.txt}
+    pattern: '^ALL_PASS$'
+    flags: m

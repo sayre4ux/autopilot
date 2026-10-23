@@ -150,8 +150,8 @@
    "id": "roles",
    "type": "backend",
    "label": "Native roles",
-   "sublabel": "8 agents \u00b7 sc or Agent tool",
-   "tag": "opus / fable aliases",
+   "sublabel": "9 agents \u00b7 sc or Agent tool",
+   "tag": "opus / fable / haiku aliases",
    "pos": [
     530,
     210
@@ -367,7 +367,7 @@
    "dot": "emerald",
    "title": "Workers",
    "items": [
-    "Native: architect, engineer, senior-engineer, engineer-doc, security-engineer, verifier, reviewer, supervisor",
+    "Native: architect, engineer, engineer-lite, senior-engineer, engineer-doc, security-engineer, verifier, reviewer, supervisor",
     "External runs return through the same intake",
     "Fails soft: no external worker is load-bearing"
    ]

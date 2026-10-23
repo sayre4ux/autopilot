@@ -12,6 +12,7 @@ dispatcher; agents never spawn agents.
 |---|---|---|
 | architect | opus / high | Design, trade-offs, arbitration; no production code |
 | engineer | opus / medium | Normal code, scripts, data |
+| engineer-lite | haiku / medium | Fully specified, self-contained code with an acceptance command |
 | senior-engineer | opus / high | Code where a defect is expensive: interfaces, concurrency, migrations, data integrity |
 | engineer-doc | opus / medium | Documents and visuals, rendered and inspected |
 | security-engineer | opus / high | Auth, secrets, crypto, validation, hardening |

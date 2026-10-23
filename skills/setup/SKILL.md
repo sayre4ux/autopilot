@@ -37,7 +37,7 @@ Check for a pre-existing orchestration setup that Autopilot replaces:
 - `~/.claude/skills/orchestrate/` — a user-level orchestrate skill. If present, it will
   take precedence over the plugin's `autopilot:orchestrate` when the user invokes
   `/orchestrate`, meaning the old harness runs instead of Autopilot.
-- `~/.claude/agents/{architect,engineer,senior-engineer,engineer-doc,security-engineer,verifier,reviewer,supervisor}.md`
+- `~/.claude/agents/{architect,engineer,engineer-lite,senior-engineer,engineer-doc,security-engineer,verifier,reviewer,supervisor}.md`
   — user-level role agents. These shadow the plugin's namespaced agents. Dispatches using
   `subagent_type: "autopilot:architect"` still resolve correctly, but the old agents may
   contain dated model pins, absolute paths, or machine-specific tool grants.

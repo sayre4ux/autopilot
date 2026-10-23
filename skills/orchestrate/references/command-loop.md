@@ -75,7 +75,8 @@ callback into a cold process — the ledger, not conversation memory, is authori
 Break the end-state into independently verifiable components. Write acceptance criteria
 before method; split components whose criteria remain vague. Mark dependencies and run
 independent work in parallel. Assign design to architect, code/data implementation to
-engineer, code where a defect is expensive to senior-engineer, document/visual implementation
+engineer, fully specified self-contained code with an acceptance command to engineer-lite,
+code where a defect is expensive to senior-engineer, document/visual implementation
 to engineer-doc, and security-sensitive work to security-engineer. Split design plus
 implementation into sequential tasks.
 

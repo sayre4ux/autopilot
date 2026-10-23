@@ -12,7 +12,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/sayre4ux/autopilot/ci.yml?branch=main&style=flat-square&label=ci&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/actions/workflows/ci.yml)
 [![Claude Code plugin](https://img.shields.io/badge/claude%20code-plugin-8b5cf6?style=flat-square&labelColor=1c1b22)](https://docs.claude.com/en/docs/claude-code/overview)
-[![Version](https://img.shields.io/badge/version-0.3.1-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
+[![Version](https://img.shields.io/badge/version-0.4.0-8b5cf6?style=flat-square&labelColor=1c1b22)](.claude-plugin/plugin.json)
 [![License](https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square&labelColor=1c1b22)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/sayre4ux/autopilot?style=flat-square&labelColor=1c1b22&color=8b5cf6)](https://github.com/sayre4ux/autopilot/stargazers)
 [Wiki](https://sayre4ux.github.io/autopilot/) · [Install](#install) · [How it works](#how-it-works) · [Roles](#roles) · [Workers](#workers)
@@ -26,7 +26,7 @@ dispatches fresh-context agents and external workers, and treats everything that
 unverified until it passes the same gates.
 
 - **Task ledger.** Work survives restarts and context resets.
-- **Eight native roles plus external workers.** Codex (GPT-6), Grok, opencode, and omp run
+- **Nine native roles plus external workers.** Codex (GPT-6), Grok, opencode, and omp run
   through one runner.
 - **Evidence gates.** Every result gets the same intake, and a fresh-context verifier checks
   all external-worker code.
@@ -82,6 +82,7 @@ Click either diagram for the interactive version, with a source link on every no
 |---|---|---|
 | architect | opus / high | Design, trade-offs, arbitration; no production code |
 | engineer | opus / medium | Normal code, scripts, data |
+| engineer-lite | haiku / medium | Fully specified, self-contained code with an acceptance command |
 | senior-engineer | opus / high | Code where a defect is expensive |
 | engineer-doc | opus / medium | Documents and visuals, rendered and inspected |
 | security-engineer | opus / high | Auth, secrets, crypto, validation, hardening |

@@ -12,6 +12,7 @@ agents to spawn agents. Doctrine must remain executable by the weakest available
 |---|---|---|---:|---|
 | architect | `subagent_type: "autopilot:architect"` | opus | high | Design, research, trade-offs, arbitration; never production code |
 | engineer | `subagent_type: "autopilot:engineer"` | opus | medium | Normal code, scripts, and data implementation |
+| engineer-lite | `subagent_type: "autopilot:engineer-lite"` | haiku | medium | Fully specified, self-contained code with its own acceptance command; reports misroutes |
 | senior-engineer | `subagent_type: "autopilot:senior-engineer"` | opus | high | Design-bearing or correctness-critical code: interfaces, concurrency, migrations, data integrity, cross-seam refactors |
 | engineer-doc | `subagent_type: "autopilot:engineer-doc"` | opus | medium | Document/visual implementation with render-and-inspect evidence |
 | security-engineer | `subagent_type: "autopilot:security-engineer"` | opus | high | Auth, secrets, crypto, validation, hardening, vulnerability work |
@@ -57,7 +58,7 @@ Every shipped role sets `effort` explicitly rather than inheriting, so a role be
 same on a host whose alias resolves elsewhere. So:
 
 - `medium` for one-shot delegated work where a routine defect is cheap to catch at intake:
-  `engineer`, `engineer-doc`.
+  `engineer`, `engineer-lite`, `engineer-doc`.
 - `high` where a missed failure is expensive or propagates: `architect`, `senior-engineer`,
   and the adversarial roles `security-engineer`, `verifier`, and `reviewer`.
 - `xhigh` and `max` only where a measured eval shows the gain pays for itself. No shipped
@@ -71,13 +72,37 @@ understates the gap. Move a role off `opus` only with an eval on the actual work
 That argument holds against `sonnet`, whose cache reads also cost $0.20/MTok, but not against
 `haiku`: Claude Haiku 5.5 costs $0.10 / $0.50 per MTok for prompts up to 100K tokens ($0.50 /
 $2.50 above), with cache reads at $0.01/MTok. It is cheaper on every line of the bill, so what
-keeps a role off `haiku` is capability, and only an eval settles that. Its shipped use is the
-user-level Explore override (`templates/Explore.md`, `effort: low`): broad read-only search
-where a miss costs one more search. Haiku 5.5 runs safety classifiers with no server-side
-fallback, so a refusal ends that dispatch; route the retry to `opus`.
+keeps a role off `haiku` is capability, and only an eval settles that. It has two shipped
+uses:
+
+- The user-level Explore override (`templates/Explore.md`, `effort: low`): broad read-only
+  search where a miss costs one more search.
+- `engineer-lite` (`medium`): fully specified, self-contained code with its own acceptance
+  command. In the `evals/model/` run (2026-10-24) a gitignore(5) matcher, graded by git
+  itself on 96 hidden checks, passed 5/5 on `engineer` (opus) at about $0.94 per dispatch
+  and 5/5 on haiku at about $0.03, in roughly 60% of the wall time. Haiku at `high` also
+  passed 5/5 but was slower and cost more, so `engineer-lite` stays at `medium`. The shipped
+  `engineer-lite` definition then passed 5/5 at about $0.015 per dispatch, in about a third
+  of the `engineer` wall time. The eval
+  covers one well-specified single-file task; it is no evidence for multi-file, design-
+  bearing, or repository-reading work, which stays on `engineer`.
+
+When dispatching to `haiku`, the orchestrator's own cost dominates: in that eval the opus
+main session was about 85% of each haiku dispatch's bill. Batch independent `engineer-lite`
+dispatches in one message and keep their briefs to spec, materials, and acceptance criteria;
+a long brief or a multi-turn exchange spends more opus tokens than the haiku worker saves.
+Write the acceptance command into the brief verbatim, as one plain command: in the eval the
+permission rules denied chained commands such as `cd x && pytest`, and the `engineer` copy
+on haiku did not retry after a denial, while `engineer-lite` retried with a single command.
+
+Haiku 5.5 runs safety classifiers with no server-side fallback, so a refusal ends that
+dispatch. Route the retry to `engineer` on `opus`, and treat an `engineer-lite`
+`MISROUTE` report the same way: redispatch to the named role without retrying on `haiku`.
 
 Route by what a defect would cost, not by task size: a small change to a public interface
-goes to `senior-engineer`; a large mechanical change goes to `engineer`.
+goes to `senior-engineer`; a large mechanical change goes to `engineer`. `engineer-lite`
+takes only work where the brief already settles every decision and names the check that
+proves it.
 
 Because the Agent tool carries no per-call effort, these values land through the definition's
 frontmatter or the sc path's `--reasoning`. An overlay that changes effort therefore takes

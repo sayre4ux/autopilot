@@ -6,7 +6,7 @@ Every native or external worker receives this self-contained shape:
 
 ```xml
 <dispatch>
-  <to>architect | engineer | senior-engineer | engineer-doc | security-engineer | supervisor | external worker id</to>
+  <to>architect | engineer | engineer-lite | senior-engineer | engineer-doc | security-engineer | supervisor | external worker id</to>
   <task_id>T-001</task_id>
   <depends_on>none | T-###</depends_on>
   <domain>code | document | analysis | design | research</domain>
